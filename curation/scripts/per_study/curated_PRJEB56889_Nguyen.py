@@ -1,0 +1,41 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+sra_cleaned_path = "./Curated_org_data/cleaned_sra_metadata.tsv"
+curated_cleaned_path = "./Curated_org_data/curated_metadata.csv"
+original_metadata_path = "./Curated_org_data/hmb_assemblies_metadata.csv"
+
+df_sra = pd.read_csv(sra_cleaned_path, sep="\t", low_memory=False)
+df_curated = pd.read_csv(curated_cleaned_path, sep=",")
+df_original = pd.read_csv(original_metadata_path, sep=",", low_memory=False)
+
+
+df_curated_PRJEB56889 = df_curated[df_curated['Study_ID'] == "PRJEB56889"].copy()
+
+#create file
+df_original_subject = df_original[df_original["study_bioproject"] == "PRJEB56889"][["sample_accession", "sample_sample-name"]]
+df_original_subject["sample_sample-name"] = df_original_subject["sample_sample-name"].apply(lambda x: x)
+
+sample_accession_subject_map = df_original_subject.set_index("sample_accession").to_dict()["sample_sample-name"]
+sample_accession_body_site_map = df_sra[df_sra['bioproject'] == "PRJNA380727"][["sample_accession", "body_site"]].set_index("sample_accession").to_dict()["body_site"]
+sample_accession_nucleotide_map = df_sra[df_sra['bioproject'] == "PRJNA380727"][["sample_accession", "nucleotide_type"]].set_index("sample_accession").to_dict()["nucleotide_type"]
+
+df_curated_PRJEB56889["Subject_ID"] = df_curated_PRJEB56889["Sample_accession"].apply(lambda x: sample_accession_subject_map[x])
+df_curated_PRJEB56889["Nucleotide_Type"] = df_curated_PRJEB56889["Sample_accession"].apply(lambda x: sample_accession_nucleotide_map[x])
+df_curated_PRJEB56889["Body_site"] = df_curated_PRJEB56889["Sample_accession"].apply(lambda x: sample_accession_body_site_map[x])
+df_curated_PRJEB56889["Body_site_core"] = "oral"
+df_curated_PRJEB56889["Location"] = "China"
+df_curated_PRJEB56889["Diet"] = np.nan
+df_curated_PRJEB56889["Diet"] = df_curated_PRJEB56889["Diet"].astype('object')
+
+df_curated_PRJEB56889.loc[df_curated_PRJEB56889["Subject_ID"].str.startswith("J", na=False), "Diet"] = "Juice"
+df_curated_PRJEB56889.loc[df_curated_PRJEB56889["Subject_ID"].str.startswith("Y", na=False), "Diet"] = "Yoghurt"
+df_curated_PRJEB56889.loc[df_curated_PRJEB56889["Subject_ID"].str.startswith("T", na=False), "Diet"] = "Tea"
+df_curated_PRJEB56889.loc[df_curated_PRJEB56889["Subject_ID"].str.startswith("C", na=False), "Diet"] = "Control (water)"
+
+df_curated_PRJEB56889["Age_catagories"] = "Child"
+
+df_curated_PRJEB56889.to_csv("./Final_Curated_Out/PRJEB56889_Nguyen.csv", index = None)

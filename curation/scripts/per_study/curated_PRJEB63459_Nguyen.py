@@ -1,70 +1,19 @@
-from google.colab import drive
-drive.mount('/content/drive')
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-sra_cleaned_path = "/content/drive/Shareddrives/Meta2/Metadata/Curated_org_data/cleaned_sra_metadata.tsv"
-curated_cleaned_path = "/content/drive/Shareddrives/Meta2/Metadata/Curated_org_data/curated_metadata.csv"
-original_metadata_path = "/content/drive/Shareddrives/Meta2/Data/hmb_assemblies_metadata.csv"
+sra_cleaned_path = "./Curated_org_data/cleaned_sra_metadata.tsv"
+curated_cleaned_path = "./Curated_org_data/curated_metadata.csv"
+original_metadata_path = "./Curated_org_data/hmb_assemblies_metadata.csv"
 
-
-df_sra = pd.read_csv(sra_cleaned_path, sep="\t")
+df_sra = pd.read_csv(sra_cleaned_path, sep="\t", low_memory=False)
 df_curated = pd.read_csv(curated_cleaned_path, sep=",")
-df_original = pd.read_csv(original_metadata_path, sep=",")
+df_original = pd.read_csv(original_metadata_path, sep=",", low_memory=False)
 
 
 df_curated_PRJEB63459 = df_curated[df_curated['Study_ID'] == "PRJEB63459"].copy()
-#check
-print(df_curated.columns)
-for col in df_curated[df_curated["Study_ID"] == "PRJEB63459"].columns:
-  print(df_curated[df_curated["Study_ID"] == "PRJEB63459"][col].value_counts())
-print(df_curated[df_curated["Study_ID"] == "PRJEB63459"]["Body_site"].value_counts(dropna=False))
-print(df_curated[df_curated["Study_ID"] == "PRJEB63459"]["Body_site_core"].value_counts(dropna=False))
-print(df_curated[df_curated["Study_ID"] == "PRJEB63459"]["Health_status"].value_counts(dropna=False))
-print(df_curated[df_curated["Study_ID"] == "PRJEB63459"]["Diet"].value_counts(dropna=False))
-print(df_curated[df_curated["Study_ID"] == "PRJEB63459"]["Location"].value_counts(dropna=False))
-print(df_curated[df_curated["Study_ID"] == "PRJEB63459"]["Lifestyle"].value_counts(dropna=False))
-print(df_curated[df_curated["Study_ID"] == "PRJEB63459"]["Sex"].value_counts(dropna=False))
-print(df_curated[df_curated["Study_ID"] == "PRJEB63459"]["Age"].value_counts(dropna=False))
-print(df_curated[df_curated["Study_ID"] == "PRJEB63459"]["Nucleotide_Type"].value_counts(dropna=False))
-
-print(df_original.columns)
-for col in df_original.columns:
-    print(col)
-pd.set_option('display.max_rows', 500)
-subset = df_original[df_original["study_bioproject"] == "PRJEB63459"]
-for col in subset.columns:
-    counts = subset[col].value_counts(dropna=True)
-    if not counts.empty:
-        print(f"\n{'='*10} {col} {'='*10}")
-        if len(counts) > 20:
-            print(counts.head(20))
-            print(f"... Total {len(counts)} unique values")
-        else:
-            print(counts)
-df_original[df_original["study_bioproject"] == "PRJEB63459"]["sample_samplemeta_host_sex"]
-print(df_original[df_original["study_bioproject"] == "PRJEB63459"]["sample_samplemeta_host_sex"].value_counts(dropna=False))
-print(df_original[df_original["study_bioproject"] == "PRJEB63459"]["sample_samplemeta_body_site"].value_counts(dropna=False))
-print(df_original[df_original["study_bioproject"] == "PRJEB63459"]["sample_samplemeta_age"].value_counts(dropna=False))
-print(df_original[df_original["study_bioproject"] == "PRJEB63459"]["sample_samplemeta_diet"].value_counts(dropna=False))
-print(df_original[df_original["study_bioproject"] == "PRJEB63459"]["sample_samplemeta_nucleic_acid_extraction"].value_counts(dropna=False))
-
-df_sra.columns
-for col in df_sra[df_sra['bioproject'] == "PRJNA862077"].columns:
-  print(df_sra[df_sra['bioproject'] == "PRJNA862077"][col].value_counts())
-df_sra[df_sra['bioproject'] == "PRJNA862077"]["biosample"].value_counts(dropna=False)
-print(df_sra[df_sra['bioproject'] == "PRJNA862077"]["body_site"].value_counts(dropna=False))
-df_sra[df_sra['bioproject'] == "PRJNA862077"]["age_years"].value_counts(dropna=False)
-df_sra[df_sra['bioproject'] == "PRJNA862077"]["sex"].value_counts(dropna=False)
-df_sra[df_sra['bioproject'] == "PRJNA862077"]["health_condition_potential"].value_counts(dropna=False)
-df_sra[df_sra['bioproject'] == "PRJNA862077"]["diet"].value_counts(dropna=False)
-df_sra[df_sra['bioproject'] == "PRJNA862077"]["geo_location"].value_counts(dropna=False)
-df_sra[df_sra['bioproject'] == "PRJNA862077"]["lifestyle"].value_counts(dropna=False)
-df_sra[df_sra['bioproject'] == "PRJNA862077"]["nucleotide_type"].value_counts(dropna=False)
 
 #create file
 df_original_subject = df_original[df_original["study_bioproject"] == "PRJEB63459"][["sample_accession", "sample_sample-name"]]
@@ -78,7 +27,20 @@ sample_accession_nucleotide_map = df_sra[df_sra['bioproject'] == "PRJNA862077"][
 df_curated_PRJEB63459["Subject_ID"] = df_curated_PRJEB63459["Sample_accession"].apply(lambda x: sample_accession_subject_map[x])
 df_curated_PRJEB63459["Nucleotide_Type"] = df_curated_PRJEB63459["Sample_accession"].apply(lambda x: sample_accession_nucleotide_map[x])
 df_curated_PRJEB63459["Body_site"] = "Gut"
+df_curated_PRJEB63459["Body_site_core"] = "Gut"
 df_curated_PRJEB63459["Health_status"] = df_curated_PRJEB63459["Sample_accession"].apply(lambda x: sample_accession_health_condition_potential_map[x])
 df_curated_PRJEB63459["Location"] = df_curated_PRJEB63459["Sample_accession"].apply(lambda x: sample_accession_location_map[x])
 
-df_curated_PRJEB63459.to_csv("/content/drive/Shareddrives/Meta2/Metadata/Final_Curated_Out/PRJEB63459_Nguyen.csv", index = None)
+bins = [-1, 2, 5, 17, 39, 64, float('inf')]
+labels = ['Infants', 'Child', 'Adolescent', 'Young_adult', 'Middle_age', 'Elderly']
+
+df_curated_PRJEB63459["Age_catagories"] = pd.cut(
+    df_curated_PRJEB63459["Age"], 
+    bins=bins, 
+    labels=labels, 
+    right=True
+)
+
+df_curated_PRJEB63459["Age_catagories"] = df_curated_PRJEB63459["Age_catagories"].astype(object)
+
+df_curated_PRJEB63459.to_csv("./Final_Curated_Out/PRJEB63459_Nguyen.csv", index = None)
