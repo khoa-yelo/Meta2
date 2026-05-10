@@ -30,13 +30,14 @@ df_original_subject = df_original[df_original["study_bioproject"] == STUDY_ID][[
 sample_accession_subject_map = df_original_subject.set_index("sample_accession").to_dict()["sample_sample-name"]
 sample_accession_nucleotide_map = df_sra[df_sra["bioproject"] == STUDY_ID_ORIGINAL][["sample_accession", "nucleotide_type"]].set_index("sample_accession").to_dict()["nucleotide_type"]
 
-df_curated_PRJEB60915["Subject_ID"] = df_curated_PRJEB60915["Sample_accession"].apply(lambda x: sample_accession_subject_map[x])
-df_curated_PRJEB60915["Nucleotide_Type"] = df_curated_PRJEB60915["Sample_accession"].apply(lambda x: sample_accession_nucleotide_map[x])
+df_sra_subject = df_sra[df_sra["bioproject"] == STUDY_ID_ORIGINAL]
+nucleotide_mapping = df_sra_subject.set_index("sample_accession").to_dict()["nucleotide_type"]
+
+df_curated_PRJEB60915["Subject_ID"] = df_curated_PRJEB60915["Sample_accession"].map(sample_accession_subject_map)
+df_curated_PRJEB60915["Nucleotide_Type"] = df_curated_PRJEB60915["Sample_accession"].map(nucleotide_mapping)
 
 df_curated_PRJEB60915["Health_status"] = "obese and with metabolic syndrome"
-df_curated_PRJEB60915["Body_site"] = "gut"
+df_curated_PRJEB60915["Body_site"] = "feces"
 df_curated_PRJEB60915["Body_site_core"] = "gut"
 
 df_curated_PRJEB60915.to_csv("/content/drive/Shareddrives/Meta2/Metadata/Final_Curated_Out/PRJEB60915.csv", index = None)
-
-df_curated_PRJEB60915.to_csv("PRJEB60915.csv", index=None)
