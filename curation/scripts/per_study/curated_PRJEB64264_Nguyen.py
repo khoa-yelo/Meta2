@@ -1,12 +1,17 @@
+# mount drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-sra_cleaned_path = "./Curated_org_data/cleaned_sra_metadata.tsv"
-curated_cleaned_path = "./Curated_org_data/curated_metadata.csv"
-original_metadata_path = "./Curated_org_data/hmb_assemblies_metadata.csv"
+sra_cleaned_path = "/content/drive/Shareddrives/Meta2/Metadata/Curated_org_data/cleaned_sra_metadata.tsv"
+curated_cleaned_path = "/content/drive/Shareddrives/Meta2/Metadata/Curated_org_data/curated_metadata.csv"
+original_metadata_path = "/content/drive/Shareddrives/Meta2/Data/hmb_assemblies_metadata.csv"
 
 df_sra = pd.read_csv(sra_cleaned_path, sep="\t", low_memory=False)
 df_curated = pd.read_csv(curated_cleaned_path, sep=",")
