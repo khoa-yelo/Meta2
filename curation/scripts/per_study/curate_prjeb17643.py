@@ -41,5 +41,6 @@ df_curated_PRJEB60912["Health_status"] = "Healthy"
 df_curated_PRJEB60912["Age_category"] = "Young_adult,Middle_age,Elderly"
 df_curated_PRJEB60912["Diet"] = df_curated_PRJEB60912["Subject_ID"].str.split("_").str[2]
 df_curated_PRJEB60912["Diet"] = df_curated_PRJEB60912["Diet"].replace({"Srdgh" : "Sourdough Bread", "White" : "White Bread"})
+df_curated_PRJEB60912["Body_site_core"] = "gut"
 
 df_curated_PRJEB60912.to_csv("/content/drive/Shareddrives/Meta2/Metadata/Final_Curated_Out/PRJEB60912.csv", index = None)
