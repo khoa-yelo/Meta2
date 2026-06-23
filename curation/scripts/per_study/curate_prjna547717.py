@@ -62,5 +62,6 @@ df_curated_PRJEB43277.loc[df_curated_PRJEB43277["Subject_ID"] == "SP_133SPT_T016
 df_curated_PRJEB43277.loc[df_curated_PRJEB43277["Subject_ID"] == "SP_303SPT_T016", "Health_status"] = "peri-implantitis,diabetes"
 
 df_curated_PRJEB43277["Lifestyle"] = df_curated_PRJEB43277["Lifestyle"].replace({"yes": "smoker", "no": "non-smoker"})
+df_curated_PRJEB43277["Body_site_core"] = "oral"
 
 df_curated_PRJEB43277.to_csv("/content/drive/Shareddrives/Meta2/Metadata/Final_Curated_Out/PRJEB43277.csv", index = None)
