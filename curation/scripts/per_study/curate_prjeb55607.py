@@ -39,4 +39,7 @@ df_curated_PRJEB55607["Location"] = "Europe"
 df_curated_PRJEB55607["Health_status"] = "Healthy"
 df_curated_PRJEB55607["Age_category"] = "Young_adult,Middle_age"
 
+df_curated_PRJEB55607["Body_site"] = "urine and feces"
+df_curated_PRJEB55607["Body_site_core"] = "urinary and gut"
+
 df_curated_PRJEB55607.to_csv("/content/drive/Shareddrives/Meta2/Metadata/Final_Curated_Out/PRJEB55607.csv", index = None)
