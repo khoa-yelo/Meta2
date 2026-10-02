@@ -9,8 +9,8 @@ from __future__ import annotations
 import os
 
 ENV_VAR = "REFMB_BUNDLES"
-DEFAULT_ASSEMBLY_VERSION = "0.8"   # current pipeline A (assembly) bundle series
-DEFAULT_READS_VERSION = "0.2"      # current pipeline B (read-based) bundle series
+DEFAULT_ASSEMBLY_VERSION = "0.8"   # current assembly-based bundle series
+DEFAULT_READS_VERSION = "0.2"      # current read-based bundle series
 
 
 def bundle_dirs() -> list[str]:
@@ -20,6 +20,7 @@ def bundle_dirs() -> list[str]:
 
 
 def is_bundle(path: str) -> bool:
+    """True when `path` is a directory holding a manifest.json."""
     return os.path.isfile(os.path.join(path, "manifest.json"))
 
 

@@ -74,7 +74,7 @@ def write_profile(path: str, reads: int = 50_000_000):
     ab = [40.0, 25.0, 20.0, 10.0, 4.0, 1.0]
     for (sp, g, f, name), a in zip(SPECIES, ab):
         lines.append(f"k__Bacteria|p__X|c__X|o__X|f__family{f}|g__genus{g}|{name}\t2|1|1|1|{f}|{g}|{sp}\t{a:.5f}\t")
-    lines.append(f"k__Bacteria|p__X|c__X|o__X|f__family815|g__genus816\t2|1|1|1|815|816\t65.0\t")   # genus row: must be ignored
+    lines.append("k__Bacteria|p__X|c__X|o__X|f__family815|g__genus816\t2|1|1|1|815|816\t65.0\t")   # genus row: must be ignored
     open(path, "w").write("\n".join(lines) + "\n")
 
 

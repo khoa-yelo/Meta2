@@ -1,4 +1,7 @@
-"""refmb.calibrate — tier B: map a user pipeline's measurement space into the reference's using the anchor panel.
+"""refmb.calibrate — map a different pipeline's measurement space into the reference's using samples measured both ways.
+
+No calibration is shipped: the containers in container/ reproduce the reference measurement and need none. This module is
+library-only (there is no `refmb calibrate` command); `refmb score --calibration DIR` applies a saved Calibration.
 
 Model (configs/s11.yaml): per layer, transformed values (log10 copies per genome; CLR as is; completeness as is) are related by a
 per-feature affine map y_ref = a_f + b_f x_user, with a_f, b_f and the residual sd shrunk toward a layer-global fit. Anchor-level
@@ -25,11 +28,13 @@ KIND = {"taxonomy_family": "clr", "taxonomy_genus": "clr", "taxonomy_species": "
 
 
 def fwd(kind, v):
+    """Forward transform of values for a model kind (log or identity)."""
     v = np.asarray(v, dtype=float)
     return np.log10(np.where(v > 0, v, np.nan)) if kind == "gene" else v
 
 
 def inv(kind, y):
+    """Inverse of fwd()."""
     return np.power(10.0, y) if kind == "gene" else y
 
 
@@ -53,7 +58,6 @@ def _fit_params(pairs: pd.DataFrame, cfg: dict) -> tuple[dict, pd.DataFrame]:
         return _fit_matched(pairs, cfg)
     if classical:
         al_g, be_g = _ols(Y, X)                     # x = alpha + beta y
-        s_g_pred = None
     else:
         al_g, be_g = _ols(X, Y)                     # y = alpha + beta x
     def to_pred(al, be):
@@ -99,6 +103,12 @@ def _fit_matched(pairs: pd.DataFrame, cfg: dict) -> tuple[dict, pd.DataFrame]:
 
 
 class Calibration:
+    """A fitted mapping from a user pipeline's values to the reference's, per layer and feature.
+
+    `layers` holds per-layer status (which layers passed the gate and are scorable), `features` the per-feature parameters
+    and status, `meta` the fit provenance. apply(layer, table, vcol) transforms a long table in place of its value column;
+    save(dir) / load(dir) persist it. Produced by fit(); applied by refmb.score.score(calibration=...)."""
+
     def __init__(self, cid: str, cfg: dict, layers: dict, features: pd.DataFrame, meta: dict):
         self.id = cid; self.cfg = cfg; self.layers = layers; self.features = features; self.meta = meta
         self._F = {l: g.set_index("feature_id") for l, g in features.groupby("layer")}
@@ -207,7 +217,6 @@ def fit(user: dict, ref: dict, anchors: list, band_of: dict, bundle, cfg: dict, 
         per_sample_cal = pd.Series(out_cal).groupby(pc["analysis_id"].to_numpy()).mean(); per_sample_nat = pd.Series(out_nat).groupby(pc["analysis_id"].to_numpy()).mean()
         from scipy.stats import spearmanr
         rho = float(spearmanr(p_cal, p_nat).statistic) if len(p_cal) > 10 else np.nan
-        n_pct = int(has_pct.sum()) if len(has_pct) else int((refF.get("percentiles_available", pd.Series(True, index=refF.index))).sum())
         surviving = int((F["status"] == "calibrated").sum()) / max(1, int(refF["percentiles_available"].sum() if "percentiles_available" in refF.columns else len(refF)))
         g = cfg["layer_gate"]; fo = float(per_sample_cal.median()) if len(per_sample_cal) else np.nan
         fn = float(per_sample_nat.median()) if len(per_sample_nat) else np.nan
@@ -227,4 +236,6 @@ def fit(user: dict, ref: dict, anchors: list, band_of: dict, bundle, cfg: dict, 
 
 
 def load_config(path: str | None = None) -> dict:
+    """Load a calibration configuration (YAML). With path=None it looks for configs/s11.yaml beside the source tree, which
+    exists only in the development layout; installed users pass a path."""
     return yaml.safe_load(open(path or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs", "s11.yaml")))

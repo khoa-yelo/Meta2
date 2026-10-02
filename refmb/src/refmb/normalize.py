@@ -31,6 +31,11 @@ CONTIG_RE = re.compile(r"length-(\d+)-cov-([\d.]+)")
 
 
 class Backbone:
+    """The NCBI taxonomy shipped in a bundle (normalization/backbone/): lineage taxid per rank, merged-id table and names.
+
+    `resolve(taxid)` follows merged ids and returns the current taxid, or None when the id is unknown to the backbone;
+    `lineage[rank][taxid]` gives the ancestor at that rank; `name[taxid]` the scientific name."""
+
     def __init__(self, path: str):
         tax = pd.read_parquet(os.path.join(path, "ncbi_taxonomy.parquet"))
         merged = pd.read_parquet(os.path.join(path, "ncbi_merged.parquet"))
@@ -63,6 +68,7 @@ class BundleSpec:
 
 
 def split_list(s) -> list[str]:
+    """Split a `;`- or `,`-separated annotation list (KO ids, Pfam accessions) into a list; empty or NaN -> []."""
     if not isinstance(s, str) or not s:
         return []
     return [x.replace("ko:", "") for x in re.split(r"[;,]", s) if x]
@@ -273,6 +279,9 @@ def from_mgnify_v5(analysis_dir: str) -> dict:
 
 
 def normalize_mgnify_v5(sample_id: str, analysis_dir: str, spec: BundleSpec, bb: Backbone) -> dict:
+    """Normalize one MGnify pipeline v5 assembly analysis folder with the bundle's rules (the reference's own measurement).
+
+    Reads the folder with from_mgnify_v5() and calls normalize(); returns {layer: DataFrame, ..., "qc": dict} as normalize() does."""
     t = from_mgnify_v5(analysis_dir)
     return normalize(sample_id, t["contigs"], t["cds"], t["cds_tax"], t["modules"], spec, bb,
                      total_length_override=t["total_length_override"], kofam=t["kofam"])

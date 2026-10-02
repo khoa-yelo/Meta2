@@ -23,6 +23,7 @@ import pandas as pd
 
 
 def sha256(p):
+    """Hex sha256 of a file."""
     h = hashlib.sha256()
     with open(p, "rb") as f:
         for c in iter(lambda: f.read(1 << 20), b""):
@@ -31,6 +32,7 @@ def sha256(p):
 
 
 def wilson(k, n, z=1.96):
+    """Wilson score interval (low, high) for k successes out of n."""
     if n == 0:
         return (np.nan, np.nan)
     p = k / n; d = 1 + z * z / n
@@ -39,6 +41,7 @@ def wilson(k, n, z=1.96):
 
 
 def weighted_quantiles(vals, w, probs):
+    """Weighted quantiles of vals at the given probabilities (0-1), interpolating on cumulative normalized weights."""
     n, F = vals.shape
     order = np.argsort(vals, axis=0, kind="stable"); sv = np.take_along_axis(vals, order, axis=0)
     sw = w[order] * ~np.isnan(sv); cw = np.cumsum(sw, axis=0); tot = cw[-1]
@@ -117,6 +120,15 @@ def landscape(V, feats, w, samples, spec, rng):
 
 
 def build(out: str, samples: pd.DataFrame, layers: dict, spec: dict, manifest_extra: dict, exclusions: pd.DataFrame | None = None, seed: int = 0) -> dict:
+    """Build a reference bundle directory from long per-layer tables and return its manifest.
+
+    out: bundle directory to create. samples: DataFrame(sample_id, study, band) of the reference pool. layers: {layer name:
+    DataFrame(sample_id, feature_id, value, detect)} with detect > 0 meaning detected. spec: percentiles, min_detected_for_percentiles,
+    bootstrap_n, band_layers (layers whose percentiles are also taken within each band), gene_layers, detection_floor,
+    landscape settings. manifest_extra is merged into manifest.json; exclusions (sample_id, reason_code, study) is written to
+    provenance/pool_exclusions.tsv. Samples are weighted so every study carries equal total weight; percentiles are weighted
+    quantiles among detected samples; a study-level bootstrap gives intervals on the 2.5th and 97.5th percentiles. The caller
+    adds the normalization/ directory beside the output."""
     t0 = time.time(); rng = np.random.default_rng(seed)
     for sub in ["features", "landscape", "provenance"]:
         os.makedirs(os.path.join(out, sub), exist_ok=True)

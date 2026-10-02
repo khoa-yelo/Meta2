@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Helpers for run_tierA.sh: contig filter, Prodigal+FragGeneScan merge (pipeline-v5 CGC semantics), DIAMOND taxonomy join,
 KOfam best hits and per-contig KO union, and the final query-directory writer (refmb/query_format.md)."""
-import argparse, gzip, os, re, sys
+import argparse, gzip, os, re
 from collections import defaultdict
 import pandas as pd
 

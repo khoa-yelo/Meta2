@@ -2,10 +2,11 @@
 
 Input: {sample_id: normalized dict} as produced by refmb.normalize (layers + qc). Output: long score table (one row per
 sample x layer x feature), per-sample x layer summaries (with the sample-level excess-outside test), landscape coordinates and
-rejections. Logic mirrors scripts/s7_score.py (verified identical on MGnify analyses, see work/s11/verify_score.md).
+rejections. The logic is the one the reference pool was scored with during validation (identical output verified on MGnify analyses).
 
-Optional calibration (tier B): a Calibration object mapping the user's measurement space into the reference's; it decides
-which layers are scorable. Without it, calibration_applied = "none" (tier A contract).
+Optional calibration: a Calibration object (refmb.calibrate) mapping a different pipeline's measurement space into the
+reference's; it decides which layers are scorable. Without it, calibration_applied = "none", which is the contract for the
+shipped containers (they reproduce the reference measurement).
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ LAYER_SPEC = {  # value column, detection column (mirrors configs/s5.yaml layers
     "taxonomy_family": ("clr", "proportion_mapped"), "taxonomy_genus": ("clr", "proportion_mapped"), "taxonomy_species": ("clr", "proportion_mapped"),
     "ko_eggnog": ("copies_per_genome", "copies_per_genome"), "ko_kofam": ("copies_per_genome", "copies_per_genome"),
     "pfam": ("copies_per_genome", "copies_per_genome"), "module": ("completeness", "completeness"),
-    "ko_humann": ("clr", "proportion_mapped"), "pathway_humann": ("clr", "proportion_mapped"),   # pipeline B function layers (HUMAnN 3)
+    "ko_humann": ("clr", "proportion_mapped"), "pathway_humann": ("clr", "proportion_mapped"),   # read-based function layers (HUMAnN 3)
 }
 ALPHA = 0.05
 MISSING_PREV = 0.70
@@ -29,6 +30,12 @@ OUTSIDE_EXPECTED = 0.05   # fraction of assessed features outside p2.5–p97.5 u
 
 
 def interp_percentile(vals, grid_vals, grid):
+    """Percentile of each value within its feature's reference distribution.
+
+    vals: array of n values; grid_vals: n x k array, row i holding feature i's reference values at the k grid percentiles
+    (e.g. p1, p2.5, ..., p99); grid: the k percentiles. Linear interpolation on the grid; a value below the first grid
+    value is placed at half the first percentile (0.5 for a grid starting at 1), one above the last at the symmetric
+    point (99.5). A row with a missing grid value gives NaN (the feature is not assessable)."""
     out = np.empty(len(vals))
     for i in range(len(vals)):
         g = grid_vals[i]
@@ -39,12 +46,19 @@ def interp_percentile(vals, grid_vals, grid):
 
 
 def bh(p):
+    """Benjamini-Hochberg adjusted p-values (q-values) for a 1-d array of p-values, capped at 1."""
     n = len(p); order = np.argsort(p); ranked = np.empty(n); ranked[order] = np.arange(1, n + 1)
     q = p * n / ranked; qs = q[order]; qs = np.minimum.accumulate(qs[::-1])[::-1]; q[order] = qs
     return np.minimum(q, 1.0)
 
 
 class Bundle:
+    """A reference bundle opened for scoring.
+
+    Reads manifest.json (percentile grid, detection floor, which layers take percentiles within the sample's quality band),
+    finds the available `features/<layer>.parquet` tables (loaded lazily by features()), and the optional landscape
+    (PCA loadings, reference coordinates, core-distance tables). `path` is the bundle directory."""
+
     def __init__(self, path: str):
         self.path = path
         self.manifest = json.load(open(os.path.join(path, "manifest.json")))
@@ -133,7 +147,7 @@ def score(norm: dict, bundle: Bundle, calibration=None, body_site_of=None, ignor
         lo = grid[:, bundle.pcols.index("p2_5")]; hi = grid[:, bundle.pcols.index("p97_5")]; v = t["value"].to_numpy()
         t["percentile"] = pct
         t["call"] = np.where(~assessable, "not_assessable", np.where(v < lo, "low", np.where(v > hi, "high", "within")))
-        if "cal_sigma" in t.columns:   # tier B: conservative call needs the 95% mapping interval to clear the band edge
+        if "cal_sigma" in t.columns:   # calibrated pipeline: conservative call needs the 95% mapping interval to clear the band edge
             from refmb.calibrate import KIND, fwd, inv as _inv
             k = KIND.get(name, "clr"); yv = fwd(k, v); sg = t["cal_sigma"].to_numpy()
             v_lo = _inv(k, yv - 1.96 * sg); v_hi = _inv(k, yv + 1.96 * sg)

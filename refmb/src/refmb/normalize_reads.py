@@ -1,4 +1,4 @@
-"""refmb.normalize_reads — pipeline B query adapter: MetaPhlAn output -> reference-ready normalized tables.
+"""refmb.normalize_reads — read-based query adapter: MetaPhlAn output -> reference-ready normalized tables.
 
 Accepts MetaPhlAn 3 (or 2/4-style) single-sample profiles and merged tables:
   single-sample : header lines starting with '#', including '#<N> reads processed' when present; columns clade_name,
@@ -6,7 +6,7 @@ Accepts MetaPhlAn 3 (or 2/4-style) single-sample profiles and merged tables:
   merged table  : optional '#mpa_...' line, then 'clade_name[\tNCBI_tax_id]\t<sample columns>'
 Rows at species level (contain 's__', no 't__') are used. Taxid resolution: the file's NCBI_tax_id (last element of the lineage) via
 the bundle backbone; else the bundle's species_taxid_map (MetaPhlAn 3 names); else NCBI name lookup on the backbone.
-Normalization mirrors scripts/s11_pipelineB_prepare.py: proportions of the resolved profile, CLR over the bundle's basis per rank with
+Normalization follows the rules the reference pool was built with (bundle/normalization/rules.json): proportions of the resolved profile, CLR over the bundle's basis per rank with
 multiplicative replacement (delta = 0.5 x smallest non-zero proportion), depth band from reads processed, mapped-fraction floor.
 """
 from __future__ import annotations
@@ -23,8 +23,16 @@ FUNCTION_LAYERS = {"ko_humann": ("UNMAPPED", "UNGROUPED"), "pathway_humann": ("U
 
 
 class ReadsBundleSpec:
+    """Normalization rules and lookup tables of a read-based bundle.
+
+    Loads `normalization/rules.json` (depth bands, CLR delta, mapped-fraction floor), the CLR basis lists per rank and
+    per function layer, the bundle's own MetaPhlAn species -> taxid map, and the NCBI backbone (taxonomy, merged ids).
+    `resolve()` places a species on the backbone the way the reference did; `band()` gives the depth band of a read count."""
+
     def __init__(self, bundle: str):
         nd = os.path.join(bundle, "normalization")
+        if not os.path.isfile(os.path.join(nd, "rules.json")):
+            raise FileNotFoundError(f"bundle has no normalization/rules.json: {bundle}")
         self.rules = json.load(open(os.path.join(nd, "rules.json")))
         self.basis = {r: [l.strip() for l in open(os.path.join(nd, f"clr_basis_{r}.txt")) if l.strip()] for r in RANKS}
         self.fbasis = {l: [x.strip() for x in open(os.path.join(nd, f"clr_basis_{l}.txt")) if x.strip()] for l in FUNCTION_LAYERS if os.path.exists(os.path.join(nd, f"clr_basis_{l}.txt"))}
@@ -92,10 +100,19 @@ def _species_rows(clades):
     return [c for c in clades if "s__" in c and "t__" not in c]
 
 
+EMPTY_TABLE_COLUMNS = ["species_name", "taxid", "rel_abundance"]
+_CLADE_HEADERS = ("clade_name", "sampleid", "id")   # first header cell of MetaPhlAn 3 / 2 single-sample files and merged tables
+
+
 def read_metaphlan(path: str) -> dict:
-    """-> {sample_id: {"table": DataFrame(species_name, taxid, rel_abundance), "reads": int|None}}"""
-    reads = None; header = None; rows = []
-    with open(path) as f:
+    """Parse a MetaPhlAn profile -> {sample_id: {"table": DataFrame(species_name, taxid, rel_abundance), "reads": int | None}}.
+
+    Accepts a single-sample file (comment header with `#clade_name ... relative_abundance`, optional `#N reads processed`)
+    or a merged table (`clade_name [NCBI_tax_id] sample1 sample2 ...`). Only species-level rows are kept; a profile without
+    any gets an empty table, which normalize_profile() turns into the EMPTY_PROFILE rejection. A file that does not have
+    MetaPhlAn's columns raises ValueError with a plain explanation."""
+    reads = None; header = None
+    with open(path, errors="replace") as f:
         lines = f.read().splitlines()
     data = []
     for ln in lines:
@@ -109,19 +126,29 @@ def read_metaphlan(path: str) -> dict:
                 header = ln[1:].split("\t")
             continue
         data.append(ln.split("\t"))
-    if header is None or header[0].lower() not in ("clade_name", "sampleid"):
+    if header is None or header[0].strip().lower() not in _CLADE_HEADERS:
+        if not data:
+            raise ValueError(f"{path}: not a MetaPhlAn profile (no '#clade_name' header line and no table rows)")
         # merged table: first data row is the header
         header = data[0]; data = data[1:]
     cols = [h.strip() for h in header]
-    df = pd.DataFrame(data, columns=cols[: len(data[0])] if data else cols)
+    if cols[0].lstrip("#").lower() not in _CLADE_HEADERS:
+        raise ValueError(f"{path}: not a MetaPhlAn profile; expected a first column 'clade_name' (got {cols[:3]}). "
+                         "Give a MetaPhlAn 3 single-sample output or a merged table")
     clade_col = cols[0]
     has_tid = "NCBI_tax_id" in cols
+    single = "relative_abundance" in cols
     sample_cols = [c for c in cols if c not in (clade_col, "NCBI_tax_id", "additional_species", "relative_abundance")]
+    if not single and not sample_cols:
+        raise ValueError(f"{path}: not a MetaPhlAn profile; no 'relative_abundance' column and no sample columns (columns: {cols})")
+    width = len(cols)
+    data = [row + [""] * (width - len(row)) if len(row) < width else row[:width] for row in data]
+    df = pd.DataFrame(data, columns=cols) if data else pd.DataFrame(columns=cols)
     df = df[df[clade_col].isin(_species_rows(df[clade_col]))].copy()
     df["species_name"] = "s__" + df[clade_col].str.split("s__").str[-1]
     df["taxid"] = df["NCBI_tax_id"].str.split("|").str[-1].where(df["NCBI_tax_id"].str.strip().ne(""), None) if has_tid else None
     out = {}
-    if "relative_abundance" in cols:                      # single-sample profile
+    if single:                                            # single-sample profile
         sid = os.path.splitext(os.path.basename(path))[0]
         t = df[["species_name", "taxid"]].copy(); t["rel_abundance"] = pd.to_numeric(df["relative_abundance"], errors="coerce").fillna(0.0) / 100.0
         out[sid] = {"table": t[t.rel_abundance > 0], "reads": reads}
@@ -133,8 +160,19 @@ def read_metaphlan(path: str) -> dict:
 
 
 def normalize_profile(sample_id: str, table: pd.DataFrame, reads, spec: ReadsBundleSpec) -> dict:
-    tot = float(table["rel_abundance"].sum())
-    res = pd.DataFrame([spec.resolve(n, (int(t) if t not in (None, "", "nan") and str(t).lstrip("-").isdigit() else None)) for n, t in zip(table["species_name"], table["taxid"])], index=table.index)
+    """Normalize one parsed MetaPhlAn profile into the reference measurement space.
+
+    table: species_name (MetaPhlAn `s__` name), taxid (string or None), rel_abundance (fraction, not percent) as returned by
+    read_metaphlan(); reads: reads processed (int) or None. Each species is placed on the bundle's taxonomy; per rank
+    (species, genus, family) the proportions over the bundle's CLR basis are centred-log-ratio transformed with multiplicative
+    replacement of zeros. Returns {"taxonomy_<rank>": DataFrame(feature_id, proportion_mapped, clr, rank), "qc": dict};
+    qc["status"] is "retained", or a rejection code (EMPTY_PROFILE when there are no species rows, LOW_MAPPED_FRACTION when
+    less than the bundle's floor of the abundance could be placed at family level)."""
+    tot = float(table["rel_abundance"].sum()) if len(table) else 0.0
+    if len(table):
+        res = pd.DataFrame([spec.resolve(n, (int(t) if t not in (None, "", "nan") and str(t).lstrip("-").isdigit() else None)) for n, t in zip(table["species_name"], table["taxid"])], index=table.index)
+    else:
+        res = pd.DataFrame({r: pd.Series(dtype=int) for r in RANKS})
     out = {}; mapped = {}
     for rank in RANKS:
         m = res[rank] != -1
