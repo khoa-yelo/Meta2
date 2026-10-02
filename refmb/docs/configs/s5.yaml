@@ -1,0 +1,41 @@
+# S5 reference construction (plan §7 S5, §8). Set before looking at results (D5).
+seed: 20261020
+bundle:
+  body_site: Gut
+  stratum: adult-global          # strata.yaml is still owner-set; one global stratum until then (§11 item 6)
+  version: "0.8"                  # v0.7 = v0.6 + genome-equivalents floor 10 in S2 (owner, 2026-09-25)
+  profile_type: assembly
+  source_pipeline: {name: mgnify, version: "5.0", workflow: assembly}
+reference_pool:
+  # LOSO mode (decisions.yaml): the base bundle uses every study except heldout_healthy;
+  # per-fold rebuilds for S8 additionally drop the evaluated study.
+  exclude_roles: [heldout_healthy, out_of_stratum, needs_review]
+  min_samples_per_study: 3
+study_weighting: equal_per_study
+percentiles: [1, 2.5, 5, 10, 25, 50, 75, 90, 95, 97.5, 99]
+bootstrap:
+  n: 500                          # study-level resampling; raise to 2000 for the release bundle
+  unit: study
+min_samples_per_stratum: 120      # below: provisional
+min_detected_for_percentiles: 20  # features detected in fewer reference samples get prevalence only
+prevalence_within_band: true
+layers:
+  taxonomy_family: {file: taxonomy_family_assembly.parquet, value: clr, detect: proportion_mapped}
+  taxonomy_genus:  {file: taxonomy_genus_assembly.parquet,  value: clr, detect: proportion_mapped}
+  ko_eggnog:       {file: ko_eggnog_assembly.parquet,       value: copies_per_genome, detect: copies_per_genome}
+  ko_kofam:        {file: ko_kofam_assembly.parquet,        value: copies_per_genome, detect: copies_per_genome}
+  pfam:            {file: pfam_assembly.parquet,            value: copies_per_genome, detect: copies_per_genome}
+  module:          {file: module_assembly.parquet,          value: completeness,      detect: completeness}   # MGnify v5 KEGG module completeness (owner decision)
+landscape:
+  layer: taxonomy_family
+  n_components: 10
+  min_prevalence: 0.10
+  k_neighbors: 10
+
+scoring:
+  detection_floor_cpg: 0.05         # gene layers: copies per genome below this are treated as not detected (reference and query)
+completeness_correction:            # variant A; enabled per build with --completeness-correction
+  min_detected_for_slope: 50        # features with fewer detections get slope 0
+  layers: [ko_eggnog, ko_kofam, pfam]
+percentiles_within_band: true   # variant C (D6 carried to percentiles): per-band conditional percentiles, selected by query band
+percentiles_within_band_layers: [ko_eggnog, ko_kofam, pfam, module]   # taxonomy is compositional and did not need band stratification (v0.4 LOSO)

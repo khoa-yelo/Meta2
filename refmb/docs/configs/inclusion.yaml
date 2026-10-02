@@ -1,0 +1,25 @@
+# Reference inclusion criteria (plan §7 S5 step 1). Applied to retained S2 gut primary analyses.
+# Healthy label sources per decisions.yaml: owner curation (Health_status_group) and cMD3 study_condition.
+# Fields are sparse (health status 64%, age 49%, antibiotics 9% in gut), so criteria are written as
+# "if the field is present it must satisfy X"; strict additionally requires the health label itself.
+#
+# `stratum` defines membership of the adult-global stratum and applies to BOTH tiers and to the
+# held-out sets (v3, 2026-09-25): age is a stratum criterion, not a strictness criterion. Cohorts whose
+# per-sample age fields are blank are judged at study level from the MGnify study title.
+stratum:
+  age_years_min: 18                                   # applied only when Age_years is present
+  age_category_disallow: [Infant, Child, Adolescent]  # applied only when Age_category is present
+  study_title_disallow_regex: "(?i)infant|child|pediatric|paediatric|neonat|newborn|preterm|toddler|adolesc|baby|babies"
+  study_title_rule: "a study whose title matches is out of stratum unless its samples carry numeric ages >= 18"
+  age_years_max_plausible: 110                        # ages above this are source errors (PRJEB26925 records 120) and count as unknown
+  study_majority_threshold: 0.5                       # if more than this share of a study's samples are out of stratum, the whole study is
+strict:
+  health_label: [Healthy, Control, cmd3_control]     # any one of these
+  exclude_health_label: [Diseased, Treatment]         # curated label overrides a cMD3 control label
+  antibiotics_disallow_regex: "(?i)^(?:yes|current|within|1 ?week|1 ?month|< ?1|past (?:week|month|6 months))"
+  age_years_range: [18, 65]                           # narrower than the stratum: working-age adults
+  bmi_range: [18.5, 30]                               # cMD3 BMI, applied only when present
+  exclude_pregnant: true                              # cMD3 `pregnant == yes`
+lenient:
+  health_label: [Healthy, Control, cmd3_control]
+  exclude_health_label: [Diseased, Treatment]

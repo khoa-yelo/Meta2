@@ -1,0 +1,33 @@
+# S11 calibration (tier B). Thresholds set BEFORE any prototype result is seen (plan D5). Owner may revise with a dated note.
+seed: 20261020
+anchor_panel: work/s11/anchor_panel.tsv        # 80 reference-pool samples, band-stratified, public ENA runs
+transform:
+  gene: log10            # copies per genome (ko_eggnog, ko_kofam, pfam): map on log10 scale, detected = value > 0
+  clr: identity          # taxonomy_family / taxonomy_genus: map on the CLR scale in the reference basis
+  completeness: identity # module completeness: map on [0, 1]
+model:
+  kind: matched                       # revised again 2026-09-26 after pass 2: classical over-dispersed (ratio 2.7-3.8x native), inverse under-dispersed (0.2-0.4x);
+                                      # 'matched' = marginal-variance matching (sd(y)/sd(x) slope), the standard middle ground. Earlier note: after the first KOfam fit, 'inverse' (regress ref on user) shrank predictions toward the
+                                      # mean (CV fraction outside 0.009 vs native 0.022, gate min_frac_outside caught it). 'classical' regresses user on
+                                      # ref and inverts (instrument calibration), preserving the spread of extremes. Both kinds are reported in the prototype.
+  shrink_k_offset: 5                  # pseudo-observations pulling a_f toward the global intercept
+  shrink_k_slope: 30                  # pseudo-observations pulling b_f toward the global slope
+  shrink_k_sigma: 10                  # pseudo-observations pulling sigma_f toward the global residual sd
+  min_pairs_per_feature: 10           # fewer anchor pairs -> feature inherits the global map (and is flagged inherited)
+  cv_folds: 5                         # anchor-level K-fold for out-of-sample residuals and the gate
+  bootstrap: 200                      # anchor bootstrap for mapping uncertainty (reported, not gating)
+detection:
+  min_sensitivity_for_missing_call: 0.90   # P(user detects | reference detects) on anchors, else expected_but_missing is not called for that feature
+  never_detected_by_user: FEATURE_NOT_PRODUCED
+feature_gate:
+  max_cv_sigma_over_halfwidth: 0.50   # out-of-sample residual sd must be <= 0.5 x (p97.5 - p2.5)/2 of the reference (transformed scale), else FEATURE_NOT_CALIBRATED
+layer_gate:                           # a layer is scorable only if ALL hold on cross-validated anchors
+  max_frac_outside: 0.08              # same hard ceiling as S6 (healthy expectation ~0.05)
+  min_frac_outside: 0.01              # (superseded 2026-09-26 by the ratio criterion below; kept for the record)
+  min_ratio_to_native: 0.5            # revised 2026-09-26: anchors are in-pool, so their native fraction outside (~0.02) is below the held-out 0.05;
+  max_ratio_to_native: 2.0            # the gate compares calibrated to native on the same cross-validated pairs instead of to a fixed floor
+  min_resolution_spearman: 0.60       # Spearman(calibrated percentile, native percentile) over anchor x feature pairs
+  min_surviving_fraction: 0.20        # share of reference features (with percentiles) that pass the feature gate
+report:
+  surviving_fraction_per_layer: true
+  heldout_check: [PRJEB62833, PRJEB75578, PRJEB39906]   # external test where the user-space data exist

@@ -1,0 +1,23 @@
+# Study-level split rules for pipeline A (reproduces work/s0/splits.tsv v4 from the inventory; re-run after any metadata swap).
+# Owner-pinned lists are kept so that a metadata refresh does not silently move studies between roles.
+seed: 20261020
+body_site: Gut
+stratum:                         # adult-global; same rule as configs/inclusion.yaml
+  age_years_min: 18
+  age_years_max_plausible: 110
+  age_category_disallow: [Infant, Child, Newborn, Toddler, Adolescent, infant, child, newborn, toddler, schoolage, adolescent]
+  study_title_disallow_regex: "(?i)infant|child|pediatric|paediatric|neonat|newborn|preterm|toddler|adolesc|baby|babies"
+  study_majority_threshold: 0.5   # a study with > this share of out-of-stratum samples is out of stratum as a whole
+needs_review:                     # owner list (2026-09-25): metadata inconsistent with body site, or non-independent replicates
+  - PRJEB57339
+  - PRJEB42319
+  - PRJEB22393
+heldout_healthy:                  # pinned; a pinned study that no longer qualifies (< min_healthy in-stratum healthy) is replaced by the seeded fallback
+  pinned: [PRJEB62833, PRJEB75578, PRJEB39906]
+  n: 3
+  min_healthy: 25
+  fallback: "seeded draw among studies with >= min_healthy in-stratum healthy adults and no case/control design"
+case_control:                     # S8 evaluation folds
+  min_cases: 20
+  min_controls: 10                # v4 kept PRJEB26165 (CDI, 14 controls) as an evaluation fold
+  exclude_conditions: ["Gastroenteritis symptoms"]   # symptom labels without a disease diagnosis are not case/control studies

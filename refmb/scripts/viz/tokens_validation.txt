@@ -1,0 +1,66 @@
+=== categorical (Fig 8, 4 feature sets), light, white print surface
+
+Palette (light, surface #ffffff, categorical): 4 slots
+  [PASS] Lightness band         all 4 inside L 0.43–0.77
+  [PASS] Chroma floor           all 4 >= 0.1
+  [PASS] CVD separation         worst adjacent #eda100↔#1baf7a ΔE 9.1 (protan) · tritan 27.0
+  [PASS] Normal-vision floor    worst adjacent #eda100↔#1baf7a ΔE 22.9 (normal)
+  [WARN] Contrast vs surface    below 3:1 — relief required (visible labels or table view): [["#1baf7a",2.82],["#eda100",2.17]]
+
+  → ALL CHECKS PASS  (CVD in the 6–8 floor band is legal ONLY with secondary encoding: direct labels, gaps, or texture)
+  scope: categorical palettes only. For a lone status/text color check WCAG text contrast; for a sequential ramp, lightness monotonicity.
+
+
+=== deviation scale as a 5-colour set, all pairs (tree leaves sit side by side)
+
+Palette (light, surface #ffffff, categorical): 5 slots
+  [FAIL] Lightness band         outside band: [["#c8c6c0",0.826],["#f3a97c",0.796]]
+  [FAIL] Chroma floor           below floor (reads gray): [["#86b6ef",0.097],["#c8c6c0",0.009]]
+  [PASS] CVD separation         worst all-pairs #f3a97c↔#c8c6c0 ΔE 8.4 (deutan) · tritan 11.9
+  [FAIL] Normal-vision floor    worst all-pairs #f3a97c↔#c8c6c0 ΔE 10.4 (normal) — below 15, hard to tell apart even with full color vision
+  [WARN] Contrast vs surface    below 3:1 — relief required (visible labels or table view): [["#86b6ef",2.11],["#c8c6c0",1.71],["#f3a97c",1.95]]
+
+  → FAILED — fix the marked checks  (CVD in the 6–8 floor band is legal ONLY with secondary encoding: direct labels, gaps, or texture)
+  scope: categorical palettes only. For a lone status/text color check WCAG text contrast; for a sequential ramp, lightness monotonicity.
+
+
+=== blue arm (ordinal: neutral -> light -> deep)
+
+Palette (light, surface #ffffff, ordinal ramp): 3 slots
+  [PASS] Lightness monotone     steps read light→dark
+  [PASS] Adjacent ΔL            all gaps >= 0.06
+  [FAIL] Light-end contrast     #c8c6c0 at 1.71:1 vs surface — below 2:1 floor
+  [FAIL] Single hue             hue spread 165° — >40°, not a one-hue ramp
+
+  → FAILED — fix the marked checks  (ordinal: one hue, monotone L, visible step gaps, light end clears surface)
+
+=== orange arm
+
+Palette (light, surface #ffffff, ordinal ramp): 3 slots
+  [PASS] Lightness monotone     steps read light→dark
+  [FAIL] Adjacent ΔL            steps too close: [["#c8c6c0","#f3a97c",0.03]]
+  [FAIL] Light-end contrast     #c8c6c0 at 1.71:1 vs surface — below 2:1 floor
+  [FAIL] Single hue             hue spread 50° — >40°, not a one-hue ramp
+
+  → FAILED — fix the marked checks  (ordinal: one hue, monotone L, visible step gaps, light end clears surface)
+
+=== sequential hexbin ramp
+
+Palette (light, surface #ffffff, ordinal ramp): 7 slots
+  [PASS] Lightness monotone     steps read light→dark
+  [PASS] Adjacent ΔL            all gaps >= 0.06
+  [FAIL] Light-end contrast     #cde2fb at 1.32:1 vs surface — below 2:1 floor
+  [PASS] Single hue             hue spread 4°
+
+  → FAILED — fix the marked checks  (ordinal: one hue, monotone L, visible step gaps, light end clears surface)
+
+=== FINAL TOKENS (2026-09-26) and how the validator results were read
+Categorical (Fig 8, four feature sets, adjacent pairlist): ALL CHECKS PASS; contrast WARN on aqua/yellow -> every series is direct-labelled and the AUROC table is in the report (relief rule).
+Deviation scale (diverging, blue<->orange, neutral midpoint #a9a7a1):
+  blue arm  #5598e7 -> #1c5cab : ordinal ALL CHECKS PASS (light end 2.99:1)
+  orange arm #e07f3b -> #b8460f: ordinal ALL CHECKS PASS (light end 2.89:1)
+  The five-step set was also run through the categorical all-pairs check; it fails only on the midpoint's chroma
+  (a diverging midpoint must read as grey) and on the normal-vision ΔE between light orange and grey (14.3 vs 15).
+  Mitigations shipped: 'within' marks are small and unlabelled; deviation marks are larger, labelled with leaders,
+  and carry ordered texture (45° low / 135° high) in print so sign survives greyscale and CVD.
+Sequential (hexbin density): one blue hue, starts at ramp step 250 (#86b6ef, 2.06:1), monotone L, gaps >= 0.06.
