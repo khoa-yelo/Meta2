@@ -29,8 +29,10 @@ identical to 0.8.0 on the packaged test inputs); the healthy-map columns change 
   `refmb normalize` and `refmb score` against a synthetic assembly bundle built with `refmb.build_reference`;
   `tests/test_cli_polish.py`).
 - Continuous integration: the workflow moved from `refmb/.github/workflows/` to `.github/workflows/test.yml` at the
-  repository root, where GitHub reads it. Whether the first run on branch `refmb` passes on Python 3.10 and 3.12 is
-  recorded here once it has completed (the previous sentence claiming it did was written before any run existed).
+  repository root, where GitHub reads it (0.8.0 claimed CI runs before any run existed). The first run (commit 7fbc355,
+  run 37029618083) passed on Python 3.12 and failed on 3.10 on one test's assumption about argparse's help layout, fixed
+  here; the suite then passes locally on CPython 3.10.22 (pandas 2.3.3, numpy 2.2.6, pyarrow 25.0.1) and 3.12.14
+  (pandas 3.0.6). The run on this commit is the first green one, if the Actions page agrees.
 - Wording: internal stage labels removed from code comments and shell headers (`fetch_dbs.sh`, `unpack_dbs.sh`,
   `normalize.py`, `build_reference.py`, `score.py`, `calibrate.py`, which now defines anchor samples as samples measured by
   both pipelines); `run_tierA.sh` header says metaSPAdes 3.15.3; `pv5_to_query.py` writes pipeline name `refmb-assembly`,

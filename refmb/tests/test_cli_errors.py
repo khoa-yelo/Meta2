@@ -164,4 +164,5 @@ def test_help_has_one_sentence_per_argument():
         assert "--bundle BUNDLE bundle directory" in text and "--out OUT output directory" in text, text
     top = run(["--help"]).stdout
     for cmd in ["bundles", "normalize", "import-mgnify", "import-metaphlan", "score", "run-mgnify", "run-metaphlan"]:
-        assert any(l.strip().startswith(cmd + " ") for l in top.splitlines()), cmd
+        # Python 3.10's argparse prints a long subcommand name on its own line, its help on the next; 3.12 puts both on one line
+        assert any(l.strip() == cmd or l.strip().startswith(cmd + " ") for l in top.splitlines()), cmd
