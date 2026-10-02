@@ -1,0 +1,42 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.8
+
+%labels
+    Maintainer refmb project
+    Description refmb pipeline B — read-based measurement as in curatedMetagenomicData 3: MetaPhlAn 3.0.14 with the mpa_v30_CHOCOPhlAn_201901 marker database (fetched separately with fetch_dbs_B.sh), Bowtie2, and the refmb package for normalization and scoring against a gut-reads-adult-global bundle.
+
+%files
+    run_pipelineB.sh /opt/refmb/run_pipelineB.sh
+    fetch_dbs_B.sh /opt/refmb/fetch_dbs_B.sh
+    ../pyproject.toml /opt/refmb/pkg/pyproject.toml
+    ../README.md /opt/refmb/pkg/README.md
+    ../LICENSE /opt/refmb/pkg/LICENSE
+    ../CHANGELOG.md /opt/refmb/pkg/CHANGELOG.md
+    ../src /opt/refmb/pkg/src
+
+%post
+    # MetaPhlAn 3.0.14 in its own environment (its dependency pins predate the pandas/numpy versions refmb needs)
+    micromamba create -y -n mpa3 -c conda-forge -c bioconda metaphlan=3.0.14 bowtie2 && micromamba clean -a -y
+    # refmb in a current Python
+    micromamba install -y -n base -c conda-forge python=3.12 pip && micromamba clean -a -y
+    /opt/conda/bin/pip install --no-cache-dir /opt/refmb/pkg
+    chmod +x /opt/refmb/run_pipelineB.sh /opt/refmb/fetch_dbs_B.sh
+
+%environment
+    export PATH=/opt/conda/envs/mpa3/bin:/opt/conda/bin:/opt/refmb:$PATH
+    export REFMB_BIN=/opt/conda/bin/refmb
+    export REFMB_BUNDLES=${REFMB_BUNDLES:-/bundles}
+
+%runscript
+    exec bash /opt/refmb/run_pipelineB.sh "$@"
+
+%help
+    refmb pipeline B container. Build from the container/ directory of the refmb tool tree:
+        apptainer build refmb_pipelineB.sif refmb_pipelineB.def
+    Fetch the marker database once (0.4 GB download, about 3 GB with the Bowtie2 index):
+        apptainer exec refmb_pipelineB.sif fetch_dbs_B.sh /data/mpa3_db 8
+    Run one sample (both mates as unpaired reads, no read QC, as curatedMetagenomicData 3 did):
+        apptainer run --bind /data/mpa3_db:/dbs,/data/refmb_bundles:/bundles,$PWD:/work refmb_pipelineB.sif \
+            --sample S1 --r1 /work/S1_1.fq.gz --r2 /work/S1_2.fq.gz --dbs /dbs \
+            --bundle gut-reads-adult-global-v0.2-lenient --out /work/S1 --threads 8
+    Output: /work/S1/S1.txt (MetaPhlAn profile), S1.reads.tsv, and score/ with scores.parquet, summaries.tsv, report.md.

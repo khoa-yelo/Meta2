@@ -1,0 +1,5 @@
+pipeline	study	sample	layer	features	assessed	low	high	expected_but_missing	cohort_cases	labelled
+A	PRJEB26165	MGYA00694698	ko_eggnog	3341	2812	103	95	179	56	14
+A	PRJEB26165	MGYA00694698	module	211	188	1	0	2	56	0
+B	FengQ_2015	FengQ_2015_SID31223	ko_humann	2754	2441	17	43	88	46	0
+B	FengQ_2015	FengQ_2015_SID31223	pathway_humann	341	320	2	3	6	46	0
