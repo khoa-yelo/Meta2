@@ -2,8 +2,11 @@
 
 The released bundles were built from public data with the project's build scripts. This page records what a rebuild
 involves so the baselines can be reproduced or extended; the per-stage scripts live in the project workspace and are not
-part of the installable package (they depend on cluster storage holding the staged analyses). The bundle builder itself
-is in the package: `refmb.build_reference.build`.
+part of the installable package (they depend on cluster storage holding the staged analyses). What the repository does
+hold: the bundle builder (`refmb.build_reference.build`), the configuration files with every threshold and seed
+(`docs/configs/`), the figure scripts (`scripts/viz/`), and the validation reports (`docs/reports/`). The public
+accession lists of every pool sample and of the held-out healthy cohorts are distributed beside the bundles (README
+download table), so a pool can be re-staged from the archives.
 
 ## Assembly-based baseline (MGnify v5)
 
@@ -18,7 +21,7 @@ Stages, in order, with typical wall time when no new analyses need staging:
 | inventory and splits | yes | 5 min | which analyses are candidates, held-out, case/control; printed role changes |
 | staging and per-analysis parsing | only new analysis ids | hours per ~1,000 new analyses | normalized long tables per analysis |
 | matrices | no | 15 min | per-layer long tables (`sample_id`, `feature_id`, `value`, `detect`) |
-| bundles (lenient, strict) | yes | 10 min each | `refs/gut-assembly-adult-global-v<V>-<tier>` via `refmb.build_reference.build`, study bootstrap 500 |
+| bundles (lenient, strict) | yes | 10 min each | `refs/gut-assembly-adult-global-v<V>-<lenient|strict>` via `refmb.build_reference.build`, study bootstrap 500 |
 | held-out calibration check | yes | 10 min | fraction outside the band on held-out healthy cohorts (gate 8 % per study) |
 | scoring of all gut analyses | labels only | 1–2 h | out-of-sample scores for every candidate |
 | leave-one-study-out fold bundles and evaluation | yes | 1–2 h | case/control AUROC with the held-out study's reference rebuilt without it |

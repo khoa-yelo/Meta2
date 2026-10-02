@@ -2,21 +2,18 @@ cff-version: 1.2.0
 message: "If you use refmb, please cite the paper below (details to be announced)."
 title: "refmb: a healthy-adult reference baseline for gut metagenome analysis"
 version: 0.8.0
-date-released: "[TBD]"
 license: MIT
 repository-code: "https://github.com/khoa-yelo/Meta2"
-doi: "[TBD]"
 authors:
   - family-names: "[TBD]"
     given-names: "[TBD]"
     affiliation: "[TBD]"
 preferred-citation:
   type: conference-paper
-  title: "[TBD]"
+  title: "[TBD] refmb: gut metagenome pipelines shipped with healthy reference baselines"
   authors:
     - family-names: "[TBD]"
       given-names: "[TBD]"
   conference:
-    name: "ICBCB 2027 [TBD]"
+    name: "[TBD] International Conference on Bioinformatics and Computational Biology (ICBCB 2027)"
   year: 2027
-  doi: "[TBD]"

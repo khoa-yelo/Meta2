@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# refmb tier A — raw reads (or contigs) -> MGnify-pipeline-v5-equivalent annotations -> refmb query directory.
+# refmb assembly-based pipeline — raw reads (or contigs) -> MGnify-pipeline-v5-equivalent annotations -> refmb query directory.
 # Pinned to the reference's measurement (docs.mgnify.org v5.0 + EBI-Metagenomics/pipeline-v5 job values, see container/pv5_ref):
 #   metaSPAdes 3.13 | contigs >= 500 bp | Prodigal 2.6.3 (-p meta) + FragGeneScan 1.31 (illumina_5), Prodigal priority
 #   DIAMOND 0.9.25 blastp --max-target-seqs 1 vs UniRef90 2019_11, taxonomy via db_uniref90_result

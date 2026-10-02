@@ -95,6 +95,15 @@ Read-based bundles:
 and why (`CASE_CONTROL_STUDY`, `HELD_OUT`, `LOW_MAPPED_FRACTION`, `OUT_OF_STRATUM`, quality floors). Sample identifiers in
 `pool_exclusions.tsv` are public run or analysis accessions.
 
+## Pool accession lists (distributed beside the bundles)
+
+Each released baseline comes with a tab-separated list of the public samples in its pool, and each pipeline with the list
+of the held-out healthy cohorts: `pool_<bundle_id>.tsv` and `heldout_healthy_<bundle series>.tsv`. Assembly-based lists
+carry `study` (BioProject), `mgnify_analysis` (MGYA), `mgnify_assembly` (ERZ), `ena_runs`, `sample_accession`, `biosample`
+and `band`; read-based lists carry `study` (curatedMetagenomicData 3 study), `cmd3_sample_id`, `ncbi_accession` (where
+cMD3 records one) and `band`. They hold identifiers only. The lists are not in the code repository; their sizes and
+sha256 sums are in the README download table.
+
 ## Versioning
 
 The bundle id carries the version. Scores are only comparable across samples scored against the same bundle id;

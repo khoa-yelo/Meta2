@@ -50,7 +50,9 @@ pipeline.
 `reports/assembly_disease_atlas.md` and `reports/reads_disease_atlas.md`: for every case/control study, the share of cases
 and controls flagged by the sample-level excess test, the median fraction outside, and per-feature deviations.
 `reports/assembly_known_biology.md` tests 43 directions expected from the literature (case versus same-study control
-percentile shifts) on the assembly pipeline; 14 are confirmed. `reports/assembly_disease_by_stratum.md`
+percentile shifts) on the assembly-based pipeline; 14 are confirmed. `reports/assembly_all_gut_analyses_scoring.md` scores
+all 8,742 gut analyses of the inventory against the standard assembly-based baseline and tabulates the fraction outside
+by health label (healthy samples included in the pool are scored in-sample there). `reports/assembly_disease_by_stratum.md`
 and `reports/reads_disease_by_stratum.md` repeat the case/control comparison within age, sex, BMI and location strata where
 a study has at least 10 cases and 10 controls, and tabulate the balance of cases and controls first.
 
@@ -62,6 +64,22 @@ The release manifest records, for each tarball, that unpacking it and re-scoring
 `scores.parquet` and `summaries.tsv` exactly. The packaged tool was checked the same way: scoring the test inputs with
 the installed package and with the pre-packaging code gives identical `scores.parquet`, `summaries.tsv` and `report.md`
 (18,733 score rows for the assembly test, 531 for the read-based test).
+
+## 6. Run time of the scoring step
+
+Measured once with `/usr/bin/time -v` on the README example (`refmb run-metaphlan` on `examples/synthetic_healthy_adult.txt`,
+102 species, against `gut-reads-adult-global-v0.2-lenient`, writing scores, summaries and report): wall time 16.2 s,
+105 % of one CPU, 2.8 GB peak resident memory (most of it the NCBI backbone of the bundle), on an AMD EPYC 7742 host
+with Python 3.12.14, pandas 2.x, from a warm file cache. Scoring an assembly-based test set of two MGnify analyses
+(18,675 score rows) took about 2 s in the same setting; normalizing a query directory took about 19 s. These are single
+measurements, not benchmarks.
+
+## Settings and scripts
+
+`docs/configs/` holds read-only copies of the configuration files the baselines and the evaluation were run with
+(`s5.yaml`, `inclusion.yaml`, `splits_rules.yaml`, `s11.yaml`) and the evaluation settings transcribed from the
+evaluation script; `scripts/viz/` the scripts that draw every figure of the paper. Both read the project workspace, not
+the repository (see their READMEs).
 
 ## What is not validated
 

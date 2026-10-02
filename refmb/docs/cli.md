@@ -13,7 +13,14 @@ refmb run-metaphlan    --bundle B --input PROFILE [PROFILE ...] [--reads-tsv FIL
 
 `B` is either a bundle directory (one containing `manifest.json`) or a bundle id such as
 `gut-reads-adult-global-v0.2-lenient`, which is looked up in the directories listed in the environment variable
-`REFMB_BUNDLES` (colon-separated). An unknown bundle is reported with the places that were searched.
+`REFMB_BUNDLES` (colon-separated). An unknown bundle is reported with the places that were searched. Every bundle is
+either assembly-based (`gut-assembly-*`, `profile_type: assembly`) or read-based (`gut-reads-*`, `profile_type: reads`);
+`normalize`, `import-mgnify` and `run-mgnify` need an assembly-based bundle, `import-metaphlan` and `run-metaphlan` a
+read-based one, and `score` checks the bundle against what the normalized directory was made from. A mismatch is
+reported and the command exits 1.
+
+`refmb --help` lists the subcommands and `refmb <command> --help` explains every argument in one sentence; the text
+below says the same at greater length.
 
 Every command has two halves: an **import** step that turns a measurement into normalized tables (`OUT/normalized/<sample>.parquet`,
 `OUT/qc.tsv`, `OUT/sample_meta.json`) and a **score** step that compares those tables with the bundle. The `run-*` commands do
@@ -48,8 +55,9 @@ name lookup. Per rank, proportions over the bundle's basis are CLR-transformed w
 (the rule set in `normalization/rules.json`).
 
 - `--reads-tsv FILE`: two columns, `sample<TAB>reads processed`, used for the depth band when the profile header has no
-  `#N reads processed` line (merged tables never do). A sample with unknown depth is scored with band `unknown` only if
-  the bundle does not score within bands; the read-based bundles do not, so it is scored.
+  `#N reads processed` line (merged tables never do). A header line is accepted and skipped; rows whose read count is not
+  a number are reported on stderr and ignored. If the depth is unknown the sample gets band `unknown`. Read-based bundles
+  do not use bands for percentiles, so such a sample is still scored.
 - `--humann-genefamilies FILE ...` and `--humann-pathabundance FILE ...`: HUMAnN 3 tables (single sample or joined;
   stratified `feature|species` rows are dropped). Gene families given as UniRef90 are regrouped to KO with the map shipped in
   the bundle; the `UNMAPPED`, `UNGROUPED` and `UNINTEGRATED` rows are removed before the CLR. These add the `ko_humann` and
@@ -57,7 +65,9 @@ name lookup. Per rank, proportions over the bundle's basis are CLR-transformed w
   `docs/validation.md`).
 
 A profile whose species cannot be placed on the backbone to at least 90 % of its abundance (family level) is rejected as
-`LOW_MAPPED_FRACTION`; a profile without species rows is `EMPTY_PROFILE`.
+`LOW_MAPPED_FRACTION`; a profile without species rows (for example a header-only file) is `EMPTY_PROFILE`. Both appear in
+`rejections.tsv`; the command still exits 0. A file that is not a MetaPhlAn table at all (no `clade_name` column) is a
+user error: one line on stderr, exit 1.
 
 ## `refmb score`
 
@@ -68,7 +78,7 @@ Reads the normalized tables from `--normalized OUT` and writes to `--out REPORT`
 | `scores.parquet` | one row per sample × layer × feature: `analysis_id`, `layer`, `feature_id`, `band`, `value`, `percentile`, `call`, `call_fdr`, `p_two_sided`, `fdr_q` |
 | `summaries.tsv` | one row per sample × layer: counts (`n_detected`, `n_assessed`, `n_low_raw`, `n_high_raw`, `n_low`, `n_high`, `n_missing`, `n_not_assessable`), `frac_outside_raw`, `excess_outside_p`, `excess_outside_ratio`, `excess_outside_q`, `weighted_deviation_score`, `quality_band`, landscape columns (`core_distance`, `core_distance_pct`, `neighbor_studies`, `PC1..PC3`), `bundle_id`, `calibration_applied` |
 | `rejections.tsv` | `analysis_id`, `reason_code`, `detail` for samples not scored |
-| `report.md` | the readable summary |
+| `report.md` | the readable summary: fraction outside the band per layer, samples with a significant excess, landscape position, the ten most extreme features per sample (taxa with their NCBI name next to the taxid), and the expected-but-missing features listed by name |
 
 Definitions:
 
@@ -93,9 +103,17 @@ other than the reference's; see the module docstring). No calibration is shipped
 
 ## Exit status and errors
 
-Commands exit non-zero with a plain message when a bundle is not found or an input file is missing. Scientific refusals are
-not errors: a sample that fails a normalization floor or has no matching reference appears in `rejections.tsv` with its
-reason code and the command exits 0.
+User errors exit 1 with a single line on stderr of the form `refmb: <what is wrong>` and no traceback: a bundle that
+cannot be found (the searched places are named), a bundle of the wrong kind for the command (assembly-based vs read-based),
+a missing `--input` file, `--analysis-dir`, `--query` or `--calibration` directory, a `--normalized` directory without
+`qc.tsv`, or an `--input` file that does not have MetaPhlAn's columns. Bad command-line syntax exits 2 (argparse).
+
+Scientific refusals are not errors: a sample that fails a normalization floor (`EMPTY_PROFILE`, `LOW_MAPPED_FRACTION`,
+assembly quality floors) or has no matching reference appears in `rejections.tsv` with its reason code and the command
+exits 0. Unparseable rows of `--reads-tsv` are reported on stderr and skipped, also with exit 0.
+
+The two-step workflow (`import-metaphlan` then `score`) and the one-step `run-metaphlan` write identical files: `qc.tsv`
+stores floats with 17 significant digits and is read back exactly.
 
 ## Library use
 

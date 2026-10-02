@@ -3,7 +3,7 @@ From: mambaorg/micromamba:1.5.8
 
 %labels
     Maintainer refmb project
-    Description refmb tier A — MGnify pipeline v5.0-equivalent assembly + annotation (metaSPAdes 3.15.3 w/ error correction | MEGAHIT 1.2.9; DIAMOND/UniRef90 2019_11; eggNOG-mapper 2.0.0; InterProScan 5.36-75.0 Pfam; KOfam KEGG 90; MGnify module completeness). Databases fetched separately (fetch_dbs.sh).
+    Description refmb assembly-based pipeline (image refmb_tierA.sif) — MGnify pipeline v5.0-equivalent assembly + annotation (metaSPAdes 3.15.3 w/ error correction | MEGAHIT 1.2.9; DIAMOND/UniRef90 2019_11; eggNOG-mapper 2.0.0; InterProScan 5.36-75.0 Pfam; KOfam KEGG 90; MGnify module completeness). Databases fetched separately (fetch_dbs.sh).
 
 %files
     run_tierA.sh /opt/refmb/run_tierA.sh
@@ -29,7 +29,8 @@ From: mambaorg/micromamba:1.5.8
     exec bash /opt/refmb/run_tierA.sh "$@"
 
 %help
-    refmb tier A container. Databases (~70 GB compressed) are not included: run fetch_dbs.sh <dbdir> once, unpack the
+    refmb assembly-based pipeline container. Databases (~70 GB compressed) are not included: run fetch_dbs.sh <dbdir> once, unpack the
     .gz / InterProScan tarball there, then:
       apptainer run --bind <dbdir>:/dbs,<work>:/work refmb_tierA.sif --sample S --out /work/S --dbs /dbs --r1 /work/R1.fq.gz --r2 /work/R2.fq.gz
-    Output /work/S/query is a refmb query directory: score it with `refmb normalize` + `refmb score` against a pipeline A bundle.
+    Output /work/S/query is a refmb query directory: score it with `refmb normalize` + `refmb score` against an assembly-based
+    bundle (gut-assembly-adult-global-*). Build from the container/ directory: cd container && apptainer build refmb_tierA.sif refmb_tierA.def

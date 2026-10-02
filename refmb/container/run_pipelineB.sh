@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pipeline B from raw reads: MetaPhlAn 3 (pinned 3.0.14, marker database mpa_v30_CHOCOPhlAn_201901, default parameters,
+# Read-based pipeline from raw reads: MetaPhlAn 3 (pinned 3.0.14, marker database mpa_v30_CHOCOPhlAn_201901, default parameters,
 # all reads of the sample given as unpaired input, as in curatedMetagenomicData 3), then refmb import + score against a
 # read-based bundle. No read QC: the cMD3 profiles were produced from the deposited reads. Reads processed (both mates counted)
 # are counted from the input files and set the depth band. Optional HUMAnN 3 tables add the function layers.

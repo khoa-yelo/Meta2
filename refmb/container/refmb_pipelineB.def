@@ -3,7 +3,7 @@ From: mambaorg/micromamba:1.5.8
 
 %labels
     Maintainer refmb project
-    Description refmb pipeline B — read-based measurement as in curatedMetagenomicData 3: MetaPhlAn 3.0.14 with the mpa_v30_CHOCOPhlAn_201901 marker database (fetched separately with fetch_dbs_B.sh), Bowtie2, and the refmb package for normalization and scoring against a gut-reads-adult-global bundle.
+    Description refmb read-based pipeline — measurement as in curatedMetagenomicData 3: MetaPhlAn 3.0.14 with the mpa_v30_CHOCOPhlAn_201901 marker database (fetched separately with fetch_dbs_B.sh), Bowtie2, and the refmb package for normalization and scoring against a gut-reads-adult-global bundle.
 
 %files
     run_pipelineB.sh /opt/refmb/run_pipelineB.sh
@@ -31,8 +31,8 @@ From: mambaorg/micromamba:1.5.8
     exec bash /opt/refmb/run_pipelineB.sh "$@"
 
 %help
-    refmb pipeline B container. Build from the container/ directory of the refmb tool tree:
-        apptainer build refmb_pipelineB.sif refmb_pipelineB.def
+    refmb read-based pipeline container. Build from the container/ directory of the refmb tool tree:
+        cd container && apptainer build refmb_pipelineB.sif refmb_pipelineB.def
     Fetch the marker database once (0.4 GB download, about 3 GB with the Bowtie2 index):
         apptainer exec refmb_pipelineB.sif fetch_dbs_B.sh /data/mpa3_db 8
     Run one sample (both mates as unpaired reads, no read QC, as curatedMetagenomicData 3 did):

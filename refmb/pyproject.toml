@@ -40,7 +40,8 @@ Repository = "https://github.com/khoa-yelo/Meta2"
 packages = ["src/refmb"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/refmb", "README.md", "LICENSE", "pyproject.toml", "CHANGELOG.md", "tests"]
+include = ["src/refmb", "README.md", "LICENSE", "pyproject.toml", "CHANGELOG.md", "CITATION.cff", "tests", "docs", "examples"]
+exclude = ["docs/reports/*.tsv"]   # hatchling always ships .gitignore in an sdist
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
