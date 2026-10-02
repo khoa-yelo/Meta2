@@ -2,7 +2,10 @@
 
 Read-only copies of the configuration files the released baselines and their evaluation were run with, so that every
 threshold and seed is inspectable. The scripts that consume them live in the project workspace (see `docs/rebuild.md`);
-nothing in the installable package reads these files.
+nothing in the installable package reads these files. The copies are verbatim and keep the workspace's internal labels:
+S5 = the baseline build, S6 = the held-out calibration check, S7 = the excess-test survey over 8,742 MGnify gut analyses,
+S8 = the case/control evaluation, S11 = the reproduction from raw reads, S12 and S14 = the healthy strata and the disease
+atlas, "anchors" = samples measured by both pipelines, and "tier A" / "tier B" = the assembly-based / read-based pipeline.
 
 | file | used by | what it fixes |
 |---|---|---|

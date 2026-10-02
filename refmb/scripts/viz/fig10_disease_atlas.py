@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import tokens as
 P = T.P
 BOUNDS = [-100, -20, -5, 5, 20, 100]; STEP_LABELS = ["≤ −20", "−20 to −5", "−5 to 5", "5 to 20", "≥ 20"]
 SHORT = {"Inflammatory bowel disease": "IBD", "Parkinson's disease": "PD", "Rheumatoid arthritis": "RA", "Colorectal neoplasia": "CRC", "Seasonal allergies": "allergy",
-         "Hemodialysis": "dialysis", "Hypertension": "hypert.", "Kidney stones": "k. stones", "C. difficile infection": "CDI", "schizofrenia": "SCZ"}
+         "Hemodialysis": "dialysis", "Hypertension": "hypertension", "Kidney stones": "kidney stones", "C. difficile infection": "CDI", "schizofrenia": "SCZ"}
 NTOP = 22
 
 
@@ -48,7 +48,7 @@ def make(out_dir):
         cv = cols["cond"].astype(str).to_numpy(); b = [k for k in range(1, len(cv)) if cv[k] != cv[k - 1]]   # one separator per condition group
         for x in b:
             ax.axvline(x, color=T.INK["secondary"], lw=0.6, zorder=4)
-        ax.set_title({"A": "a  assembly pipeline (A), genera", "B": "b  read pipeline (B), genera"}[pl], loc="left")
+        ax.set_title({"A": "a  assembly pipeline, genera", "B": "b  read pipeline, genera"}[pl], loc="left")
     h = [Patch(facecolor=T.DEV[k], edgecolor="none", label=l) for k, l in zip(T.DEV_ORDER, STEP_LABELS)]
     h.append(plt.Line2D([], [], marker="o", ls="", ms=1.8, color=T.INK["primary"], label="q ≤ 0.05 and |shift| ≥ 10"))
     fig.legend(handles=h, loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=6, frameon=False, handlelength=1.2, handletextpad=0.4, columnspacing=1.2, borderaxespad=0,

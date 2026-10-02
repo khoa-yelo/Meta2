@@ -255,9 +255,12 @@ def write_report(r: dict, bundle: Bundle, out: str, calibration_id: str):
     r["summaries"].to_csv(os.path.join(out, "summaries.tsv"), sep="\t", index=False)
     r["rejections"].to_csv(os.path.join(out, "rejections.tsv"), sep="\t", index=False)
     S = r["summaries"]; m = bundle.manifest; ptype = m.get("profile_type", "")
-    kind = {"assembly": "gut assembly analyses", "reads": "gut read-based profiles"}.get(ptype, "gut samples"); sp = m.get("source_pipeline", {})
+    sp = m.get("source_pipeline", {}); bid = m.get("bundle_id", "")
+    measured = {"gut-assembly-adult-global": "MGnify pipeline v5.0", "gut-reads-adult-global": "curatedMetagenomicData 3: MetaPhlAn 3 + HUMAnN 3"}
+    measured = next((v for k, v in measured.items() if bid.startswith(k)), f"{sp.get('name', '')} {sp.get('version', '')}".strip())
+    kind = {"assembly": "gut assembly analyses", "reads": "gut read-based profiles"}.get(ptype, "gut samples") + (f" ({measured})" if measured else "")
     remeasure = {"assembly": "re-assemblies of the same reads", "reads": "re-profiling of the same reads"}.get(ptype, "re-measurements of the same reads")
-    L = [f"# refmb report — {m['bundle_id']}\n", f"Reference: {m['n_samples']:,} healthy adult {kind} ({sp.get('name', '')} {sp.get('version', '')}), {m['n_studies']} studies. Calibration: {calibration_id}. "
+    L = [f"# refmb report — {m['bundle_id']}\n", f"Reference: {m['n_samples']:,} healthy adult {kind}, {m['n_studies']} studies. Calibration: {calibration_id}. "
          f"Scored {S['analysis_id'].nunique() if not S.empty else 0} sample(s); {len(r['rejections'])} not scored (rejections.tsv).\n",
          "Read this first: a healthy adult gut sample measured like the reference has about 5% of features outside the 2.5–97.5 percentile band. "
          "The sample-level excess test asks whether a sample has more than that (q ≤ 0.05 after BH across samples within a layer). "
@@ -273,7 +276,7 @@ def write_report(r: dict, bundle: Bundle, out: str, calibration_id: str):
             return g
 
         piv = S.pivot_table(index="analysis_id", columns="layer", values="frac_outside_raw")
-        L += ["## Fraction of assessed features outside the reference band\n", piv.round(3).to_markdown(), ""]
+        L += ["## Fraction of assessed features outside the reference band\n", piv.round(3).to_markdown(floatfmt=".3f"), ""]
         sig = S[S["excess_outside_q"] <= 0.05]
         L += ["## Samples with a significant excess (q ≤ 0.05)\n", (sig[["analysis_id", "layer", "n_assessed", "n_low_raw", "n_high_raw", "excess_outside_ratio", "excess_outside_q"]].round(3).to_markdown(index=False) if len(sig) else "none"), ""]
         if "core_distance_pct" in S.columns:

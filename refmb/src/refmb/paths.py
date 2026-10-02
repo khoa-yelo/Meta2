@@ -45,14 +45,3 @@ def list_bundles() -> list[str]:
             out.extend(os.path.join(d, n) for n in sorted(os.listdir(d)) if is_bundle(os.path.join(d, n)))
     return out
 
-
-def bundle_A(tier: str = "lenient", loso: str | None = None, root: str | None = None, version: str = DEFAULT_ASSEMBLY_VERSION) -> str:
-    """Name (or path, when root is given) of an assembly bundle: gut-assembly-adult-global-v<version>-<tier>[-loso-<study>]."""
-    name = f"gut-assembly-adult-global-v{version}-{tier}" + (f"-loso-{loso}" if loso else "")
-    return os.path.join(root, name) if root else name
-
-
-def bundle_B(tier: str = "lenient", loso: str | None = None, root: str | None = None, version: str = DEFAULT_READS_VERSION) -> str:
-    """Name (or path, when root is given) of a read-based bundle: gut-reads-adult-global-v<version>-<tier>[-loso-<study>]."""
-    name = f"gut-reads-adult-global-v{version}-{tier}" + (f"-loso-{loso}" if loso else "")
-    return os.path.join(root, name) if root else name

@@ -12,8 +12,7 @@ From: mambaorg/micromamba:1.5.8
     emapper2 /opt/refmb/emapper2
 
 %post
-    micromamba install -y -n base -c conda-forge -c bioconda \
-        python=3.8 && micromamba create -y -n py27 -c conda-forge python=2.7 && micromamba create -y -n java8 -c conda-forge openjdk=8 && micromamba install -y -n base -c conda-forge -c bioconda \
+    micromamba create -y -n py27 -c conda-forge python=2.7 && micromamba create -y -n java8 -c conda-forge openjdk=8 && micromamba install -y -n base -c conda-forge -c bioconda \
         python=3.8 spades=3.15.3 megahit=1.2.9 prodigal=2.6.3 fraggenescan=1.31 diamond=0.9.25 hmmer=3.2.1 trimmomatic=0.36 bwa-mem2 samtools \
         networkx biopython pandas pyarrow curl && micromamba clean -a -y
     chmod +x /opt/refmb/run_tierA.sh

@@ -58,7 +58,7 @@ def make(out_dir):
     box(ax, 1.55, yA, 2.15, h, "Assembly pipeline", ["pinned container; reproduces", "MGnify v5: metaSPAdes/MEGAHIT,", "Prodigal, FragGeneScan; eggNOG,", "KOfam, Pfam. Hours per sample"], SA)
     box(ax, 1.55, yB, 2.15, h, "Read pipeline", ["MetaPhlAn 3.0.14; reproduces", "curatedMetagenomicData 3;", "HUMAnN 3 for genes, pathways.", "Minutes per sample"], SB)
     box(ax, 4.0, yA, 1.6, h, "Normalize", ["with the baseline's rules:", "genome equivalents, CLR,", "assembly-size class"], SA)
-    box(ax, 4.0, yB, 1.6, h, "Normalize", ["with the baseline's rules:", "relative abundance, CLR,", "read-depth band"], SB)
+    box(ax, 4.0, yB, 1.6, h, "Normalize", ["with the baseline's rules:", "relative abundance, CLR,", "read-depth class"], SB)
     box(ax, 5.85, yA, 2.25, h, "Healthy baseline, assembly", [f"{nA:,} healthy adults, {sA} studies", "family, genus, KO, Pfam, module;", "per feature: prevalence,", "percentiles, bootstrap CIs"], SA, sub="statistics only,\nno sample-level data")
     box(ax, 5.85, yB, 2.25, h, "Healthy baseline, read", [f"{nB:,} healthy adults, {sB} studies", "family, genus, species, KO,", "pathway; per feature: prevalence,", "percentiles, bootstrap CIs"], SB, sub="statistics only,\nno sample-level data")
     # report box: two short lists with hanging indents

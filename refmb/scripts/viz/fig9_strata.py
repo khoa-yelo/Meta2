@@ -10,7 +10,7 @@ P = T.P
 GROUPS = [("age_bin", "age", ["18-39", "40-64", "65+"]), ("sex", "sex", ["female", "male"]), ("bmi_class", "BMI", ["<18.5", "18.5-25", "25-30", ">=30"]),
           ("westernized", "westernized", ["yes", "no"]), ("region", "region", ["Europe", "N. America", "E. Asia", "W. Asia", "C. Asia", "S. Asia", "Oceania", "Africa"])]
 LAYERS = {"A": [("taxonomy_family", "family"), ("ko_eggnog", "KO")], "B": [("taxonomy_family", "family"), ("ko_humann", "KO")]}
-TITLE = {"A": "a  assembly pipeline (A)", "B": "b  read pipeline (B)"}
+TITLE = {"A": "a  assembly pipeline", "B": "b  read pipeline"}
 
 
 def make(out_dir):

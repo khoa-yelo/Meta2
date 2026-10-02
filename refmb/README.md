@@ -25,18 +25,18 @@ outside the central 95 % band exceeds the 5 % a healthy sample is expected to sh
 
 ```bash
 pip install git+https://github.com/khoa-yelo/Meta2.git@refmb#subdirectory=refmb
-refmb --version          # refmb 0.8.1
+refmb --version          # refmb 0.8.2
 ```
 
 Requirements: Python 3.10 or later; numpy, pandas, scipy, pyarrow, pyyaml and tabulate are installed automatically.
-To work from a clone: `cd refmb && pip install -e .[test] && pytest` (20 tests, about 30 s).
+To work from a clone: `cd refmb && pip install -e .[test] && pytest` (30 tests, about 40 s).
 
 The package only normalizes and scores. Producing the measurement from raw reads needs the pipeline containers below.
 
 ## Get a reference bundle
 
 Bundles, the assembly-based pipeline image and the baseline pool accession lists are distributed outside GitHub
-(download location to be announced [TBD]). File names, sizes and checksums:
+(to be deposited on Zenodo together with the container image `refmb_tierA.sif`, DOI [TBD]). File names, sizes and checksums:
 
 | file | bytes | sha256 |
 |---|---:|---|
@@ -83,7 +83,8 @@ refmb run-metaphlan --bundle gut-reads-adult-global-v0.2-lenient \
 cat example_report/report.md
 ```
 
-Expected: the sample is scored on the family, genus and species layers (quality band `high`, 45 million reads), with
+The bundle `gut-reads-adult-global-v0.2-lenient` must already be unpacked under `$REFMB_BUNDLES` (previous section);
+the baselines and the container image will be deposited at Zenodo, DOI [TBD]. Expected: the sample is scored on the family, genus and species layers (quality band `high`, 45 million reads), with
 28, 56 and 102 features assessed and 187 score rows in total; the fraction of features outside the reference band is
 0.000 on every layer and no layer shows a significant excess, as it must be for a profile sitting at the reference
 medians. One family (Coprobacillaceae) is listed as expected but missing, because the synthetic profile carries no
@@ -163,6 +164,15 @@ All numbers below come from the reports in `docs/reports/` (see `docs/validation
 - `docs/configs/` — read-only copies of the baseline-build and evaluation settings (thresholds, seeds)
 - `scripts/viz/` — the scripts that draw every figure of the paper (they read the project workspace, see its README)
 - `CHANGELOG.md`
+
+## Development notes
+
+- The early example profile `refmb/examples/CosteaPI_2017_alien2-11-0-0.txt` (a public curatedMetagenomicData 3 profile,
+  commits `97cba6b`, `92c85ce`) stays in the history of branch `refmb` by the owner's decision of 2026-10-02 (`CHANGELOG.md`);
+  the example shipped since 0.8.0 is synthetic.
+- Tests: `pip install -e .[test] && pytest` (30 tests, about 40 s). CI runs them on Python 3.10 and 3.12
+  (`.github/workflows/test.yml` at the repository root).
+- `scripts/viz/` holds byte-identical copies of the project workspace's figure scripts; they are not edited here.
 
 ## Citation
 

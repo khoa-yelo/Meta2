@@ -21,7 +21,7 @@ individual figure scripts are being moved to the same variable and may still hol
 this copy). Under that root they expect `results/` (the validation tables, of which `docs/reports/` holds verbatim
 copies), `work/` (per-sample score tables, not distributed), `refs/` (the bundles, distributed separately) and
 `resources/fonts/`. Several scripts also import `VER`, `VTAG` and `bundle_A` from the workspace's own `refmb/paths.py` (reached through
-`sys.path.insert(0, ...)` in `tokens.py`); the installed package defines `bundle_A` and `bundle_B` but not `VER`/`VTAG`, so
-the scripts need the workspace copy of `paths.py`, not the packaged one. Re-running them therefore needs the full workspace; the copies here document how each figure was
+`sys.path.insert(0, ...)` in `tokens.py`); the installed package's `paths.py` defines none of these (0.8.2 removed its unused
+`bundle_A`/`bundle_B`), so the scripts need the workspace copy of `paths.py`, not the packaged one. Re-running them therefore needs the full workspace; the copies here document how each figure was
 drawn and which numbers it shows. Where a figure prints a number, the number is computed from the result tables listed
 in `docs/validation.md`.

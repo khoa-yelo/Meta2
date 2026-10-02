@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+- 2026-10-02: the repository owner decided to leave the early example profile `refmb/examples/CosteaPI_2017_alien2-11-0-0.txt`
+  (a public curatedMetagenomicData 3 MetaPhlAn 3 profile, commits `97cba6b` and `92c85ce`) in the pushed history of branch
+  `refmb` rather than rewrite it; the example profile shipped since 0.8.0, `examples/synthetic_healthy_adult.txt`, is synthetic.
+
+## 0.8.2 — 2026-10-02, packaging round 4
+
+Documentation and build hygiene after the third external review; percentiles, calls, the excess test and the landscape
+columns are unchanged (`scores.parquet` and `summaries.tsv` are identical to 0.8.1 on the packaged test inputs).
+
+- The report header names the measurement plainly: `6,494 healthy adult gut read-based profiles (curatedMetagenomicData 3:
+  MetaPhlAn 3 + HUMAnN 3)` and `1,941 healthy adult gut assembly analyses (MGnify pipeline v5.0)` for the released bundle
+  series; other bundles keep the manifest's `source_pipeline` name and version. The fraction-outside table prints three
+  decimals (`0.000`, as the README says) instead of dropping trailing zeros.
+- `docs/cli.md` documents all 31 columns of `summaries.tsv` (added: `expected_false_positives_at_alpha`, `layer_status`,
+  `mapped_fraction_family`, `genome_equivalents_cov`, `fallback_used`, `landscape_centring`, `neighbor_bands`).
+- `paths.py` drops `bundle_A`/`bundle_B`, which nothing in the package,
+  tests or containers called; the figure scripts import them from the project workspace's own copy of `paths.py`.
+- `container/Dockerfile` no longer copies `tests/` into the scoring image (they were never run there);
+  `container/refmb_tierA.def` installs `python=3.8` once instead of twice. The assembly image does not install the refmb
+  package (its Python 3.8 predates refmb's requirement of 3.10), so `pv5_to_query.py` records the refmb version in
+  `sample.json` only where refmb is importable and writes `unknown` otherwise; 0.8.1's note is corrected below and in
+  `docs/query_format.md`.
+- README: 30 tests (about 40 s); the five-minute example says that the bundle must already be unpacked under
+  `$REFMB_BUNDLES` and that the baselines and the container image will be deposited on Zenodo (DOI [TBD]); a *Development
+  notes* section records the owner's decision above about the early example profile.
+- `docs/reports/assembly_all_gut_analyses_scoring.md` is the verbatim copy of the survey re-scored with the 0.8.1 scorer
+  (2026-10-02); only its landscape table (distance-from-centre percentiles by health label) differs from the 0.8.0 copy.
+- `docs/validation.md` and `docs/configs/README.md` define the internal labels that the verbatim report copies and
+  configuration files carry (S6, S7, S8, S11, S12/S14, anchors, tier A/B).
+- The default branch's README (`main`) now points to `refmb/` on branch `refmb`. `scripts/viz/` re-copied byte-identical
+  from the project workspace after the fourth figure revision (10 of 17 scripts changed; see the project's figure notes).
+
 ## 0.8.1 — 2026-10-02, packaging round 3
 
 Bug fixes after the second external review. Percentiles, calls and the excess test are unchanged (`scores.parquet` is
@@ -36,7 +70,8 @@ identical to 0.8.0 on the packaged test inputs); the healthy-map columns change 
 - Wording: internal stage labels removed from code comments and shell headers (`fetch_dbs.sh`, `unpack_dbs.sh`,
   `normalize.py`, `build_reference.py`, `score.py`, `calibrate.py`, which now defines anchor samples as samples measured by
   both pipelines); `run_tierA.sh` header says metaSPAdes 3.15.3; `pv5_to_query.py` writes pipeline name `refmb-assembly`,
-  the installed refmb version and the assembler actually used into `sample.json`; one-line docstrings on the public names
+  the refmb version when the package is importable (it is not inside the assembly image, whose Python 3.8 cannot import
+  refmb, so the field reads `unknown` there; see 0.8.2) and the assembler actually used into `sample.json`; one-line docstrings on the public names
   that lacked one. `docs/configs/evaluation_settings.md` states the inclusion rule as applied per pipeline (assembly-based
   at least 20 cases and 10 controls, 11 studies; read-based at least 20 and 20, 14 studies) and that `HMP_2019_ibdmdb` is a
   largely adolescent cohort (median age 16.5) included in the read-pipeline evaluation; `docs/validation.md` gives the

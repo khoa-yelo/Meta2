@@ -1,7 +1,11 @@
 # How the baselines were validated
 
 The reports in `docs/reports/` are verbatim copies of the result files the numbers in the paper and in the README come from.
-This page says what each one tested and where its headline numbers are.
+This page says what each one tested and where its headline numbers are. Because the copies are verbatim, they still carry
+the development workspace's internal labels: S6 = the held-out calibration check (section 2), S7 = the excess-test survey over
+8,742 MGnify gut analyses (`assembly_all_gut_analyses_scoring.md`), S8 = the case/control evaluation (section 4), S11 = the
+reproduction from raw reads (section 1), S12 and S14 = the healthy strata and the disease atlas (sections 3 and 4), "anchors"
+= samples measured by both pipelines, and "tier A" / "tier B" = the assembly-based / read-based pipeline.
 
 ## 1. Does the pipeline reproduce the reference measurement from raw reads?
 

@@ -4,7 +4,8 @@ track runs from the inner edge (0) to the outer edge (100) with the healthy rang
 this case's percentile against a baseline built without its study. Families outside the range that are also outside in
 >= 25 % of the study's cases are labelled; expected-but-missing families are hollow rings. (a) wheel; (b) inset: one
 labelled low family's full baseline distribution with this case marked, joined to its leaf by a leader line.
-Every count in the title and centre is computed from the scores table (example_case.py), never typed."""
+Every count in the centre text is computed from the scores table (example_case.py), never typed; the takeaway sentence
+is the caption's, the figure carries no headline."""
 import os, sys
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
@@ -53,7 +54,7 @@ def make(out_dir):
     n = len(d); theta = np.linspace(0, 2 * np.pi, n, endpoint=False) + np.pi / 2
     r_in, r_out = 1.0, 2.0                      # percentile 0 -> r_in, 100 -> r_out
     rp = lambda p: r_in + (r_out - r_in) * np.clip(p, 0, 100) / 100
-    fig = plt.figure(figsize=(T.DOUBLE_IN, 4.6))
+    fig = plt.figure(figsize=(T.DOUBLE_IN, 4.0))
     ax = fig.add_axes([0.0, 0.0, 0.66, 0.93]); ax.set_aspect("equal"); ax.axis("off")
     ax.set_xlim(-4.4, 3.4); ax.set_ylim(-3.0, 3.0)   # left-heavy so the left column of family labels is not clipped
     ax.add_patch(Wedge((0, 0), rp(97.5), 0, 360, width=rp(97.5) - rp(2.5), facecolor=T.INK["grid"], edgecolor="none", zorder=0))
@@ -108,21 +109,29 @@ def make(out_dir):
     for p_, lab, dx in [(0, "0", -0.05), (2.5, "2.5", 0.09), (50, "50", 0), (97.5, "97.5", -0.1), (100, "100", 0.16)]:
         rr = rp(p_) + (0.09 if p_ == 100 else -0.05 if p_ == 97.5 else -0.11 if p_ == 0 else 0.07)
         ax.text(rr * np.cos(ang) + dx, rr * np.sin(ang), lab, fontsize=T.PT_MIN, color=T.INK["muted"], ha="center", va="center")
-    fig.text(0.02, 0.925, "a", fontsize=T.PT_TITLE, va="top", ha="left")
-    fig.text(0.02, 0.975, f"One C. difficile infection case: {c['n_low']} of {c['n_assessed']} assessed families below the healthy range, {EC.none_or(c['n_high'])} above", fontsize=T.PT_TITLE, va="top")
-    # legend (right column)
-    lg = fig.add_axes([0.66, 0.5, 0.33, 0.44]); lg.axis("off")
-    none_hi = "  (none in this case)" if c["n_high"] == 0 else ""
-    items = [(T.DEV["high_deep"], "high: > 99th percentile" + none_hi), (T.DEV["high_light"], "high: 97.5th–99th" + none_hi), (T.DEV["neutral"], "within the healthy range (2.5th–97.5th)"),
-             (T.DEV["low_light"], "low: 1st–2.5th"), (T.DEV["low_deep"], "low: < 1st percentile")]
+    fig.text(0.02, 0.975, "a", fontsize=T.PT_TITLE, va="top", ha="left")   # the takeaway is the caption's; no in-image headline (as in the other figures)
+    # legend (right column): only the classes present in this case, plus one row saying that the high class is absent
+    lg = fig.add_axes([0.66, 0.50, 0.33, 0.47]); lg.axis("off")
+    pct = d["pct"].to_numpy()
+    items = []
+    if c["n_high"] == 0:
+        items.append((T.DEV["high_light"], "high: > 97.5th percentile (none in this case)"))
+    else:
+        items += [(T.DEV["high_deep"], "high: > 99th percentile"), (T.DEV["high_light"], "high: 97.5th–99th")]
+    items.append((T.DEV["neutral"], "within the healthy range (2.5th–97.5th)"))
+    if np.any((pct >= 1) & (pct < 2.5)):
+        items.append((T.DEV["low_light"], "low: 1st–2.5th"))
+    if np.any(pct < 1):
+        items.append((T.DEV["low_deep"], "low: < 1st percentile"))
     for k, (col, lab) in enumerate(items):
         lg.scatter([0.05], [0.95 - 0.11 * k], s=16, color=col, edgecolor=T.INK["surface"], linewidth=0.3, transform=lg.transAxes); lg.text(0.12, 0.95 - 0.11 * k, lab, va="center", fontsize=T.PT_MIN, transform=lg.transAxes)
-    lg.scatter([0.05], [0.95 - 0.11 * 5], s=14, transform=lg.transAxes, **T.MISSING_RING); lg.text(0.12, 0.95 - 0.11 * 5, "expected but missing\n(carried by > 50 % of healthy adults)", va="center", fontsize=T.PT_MIN, transform=lg.transAxes, linespacing=1.2)
-    lg.add_patch(plt.Rectangle((0.03, 0.95 - 0.125 * 6 - 0.012), 0.04, 0.024, facecolor=T.DEV["low_deep"], edgecolor="none", transform=lg.transAxes))
-    lg.text(0.12, 0.95 - 0.125 * 6, f"outer ring: share of the {ncases} cases outside\n(light ≥ 25 %, deep ≥ 50 %)", va="center", fontsize=T.PT_MIN, transform=lg.transAxes, linespacing=1.2)
-    # inset (b): one labelled low family's baseline distribution, joined to its leaf
+    k = len(items)
+    lg.scatter([0.05], [0.95 - 0.11 * k], s=14, transform=lg.transAxes, **T.MISSING_RING); lg.text(0.12, 0.95 - 0.11 * k, "expected but missing\n(carried by > 50 % of healthy adults)", va="center", fontsize=T.PT_MIN, transform=lg.transAxes, linespacing=1.2)
+    lg.add_patch(plt.Rectangle((0.03, 0.95 - 0.11 * k - 0.14 - 0.012), 0.04, 0.024, facecolor=T.DEV["low_deep"], edgecolor="none", transform=lg.transAxes))
+    lg.text(0.12, 0.95 - 0.11 * k - 0.14, f"outer ring: share of the {ncases} cases outside\n(light ≥ 25 %, deep ≥ 50 %)", va="center", fontsize=T.PT_MIN, transform=lg.transAxes, linespacing=1.2)
+    # inset (b): one labelled low family's baseline distribution, joined to its leaf; moved up into the space the legend freed
     fid = d.index[d["name"] == INSET_FAMILY][0] if (d["name"] == INSET_FAMILY).any() else d["pct"].idxmin()
-    ins = fig.add_axes([0.73, 0.1, 0.25, 0.3])
+    ins = fig.add_axes([0.73, 0.12, 0.25, 0.32])
     grid = [1, 2.5, 5, 10, 25, 50, 75, 90, 95, 97.5, 99]; vals = [ref.loc[fid, f"p{str(g).replace('.', '_')}"] for g in grid]
     ins.step(vals, grid, where="post", color=T.INK["primary"], lw=1.0); ins.axhspan(2.5, 97.5, color=T.INK["grid"], lw=0, zorder=0)
     pm = d.loc[fid, "pct"]; vm = np.interp(pm, grid, vals)

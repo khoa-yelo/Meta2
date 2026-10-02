@@ -49,10 +49,10 @@ With ~1,200 reference samples the smallest attainable two-sided p per feature is
 
 | group        |   core_distance_pct |
 |:-------------|--------------------:|
-| (blank)      |                88.4 |
-| Diseased     |                88.5 |
-| Healthy      |                90.8 |
-| Other        |                93.8 |
-| Treatment    |                87.7 |
-| cMD3 case    |                95.5 |
-| cMD3 control |                97   |
+| (blank)      |                42.4 |
+| Diseased     |                44.2 |
+| Healthy      |                55.1 |
+| Other        |                59.2 |
+| Treatment    |                23.8 |
+| cMD3 case    |                77.4 |
+| cMD3 control |                81   |

@@ -10,11 +10,15 @@ import matplotlib
 matplotlib.use("Agg")
 from matplotlib import font_manager, rcParams
 
-# Project root: REFMB_PROJECT in the environment, else the development checkout. Every figure script reads paths from
-# here, so the scripts can be copied into the public repository unchanged. A wrong root fails loudly, never silently.
-P = os.environ.get("REFMB_PROJECT", "/home/classes/bios/270/khoa/meta2/project")
-if not os.path.isdir(P) or not os.path.isdir(os.path.join(P, "resources")):
-    raise FileNotFoundError(f"REFMB_PROJECT={P!r} is not a refmb project root (needs a resources/ directory); set REFMB_PROJECT to the project directory")
+# Project root: REFMB_PROJECT in the environment; when unset, the directory two levels above this file (the scripts live in
+# <project>/scripts/viz/). Every figure script reads paths from here, so the scripts can be copied into the public
+# repository unchanged; there the fallback is not a project directory and the check below fails with a plain message.
+_DEFAULT_P = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+P = os.environ.get("REFMB_PROJECT") or _DEFAULT_P
+if not os.path.isdir(P) or not os.path.isdir(os.path.join(P, "resources")) or not os.path.isdir(os.path.join(P, "refs")):
+    raise FileNotFoundError(
+        f"refmb project root not found: REFMB_PROJECT is {os.environ.get('REFMB_PROJECT')!r} and the fallback {_DEFAULT_P!r} is not a project directory "
+        "(a project root holds resources/, refs/, work/ and results/). Set REFMB_PROJECT=/path/to/project before running the figure scripts.")
 # curatedMetagenomicData 3 sample metadata (used by fig2 panel c only); lives beside the project in the development checkout
 CMD3_META = os.environ.get("REFMB_CMD3_META", os.path.join(os.path.dirname(P), "cmd3", "cmd3_release_sampleMetadata.csv"))
 
@@ -27,8 +31,9 @@ FONT = "DejaVu Sans"
 # --- deviation scale: 5 diverging steps, blue (low) -> neutral -> orange (high); lightness differs as well as hue
 DEV = {"low_deep": "#1c5cab", "low_light": "#5598e7", "neutral": "#a9a7a1", "high_light": "#e07f3b", "high_deep": "#b8460f"}
 DEV_ORDER = ["low_deep", "low_light", "neutral", "high_light", "high_deep"]
-# categorical, fixed order (reference palette slots 1-4), used for the four S8 feature sets; direct-labelled
-CAT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
+# categorical, fixed order (reference palette slots 7, 6, 5, 4: violet, green, magenta, yellow), used for the four feature sets of
+# the classification benchmark; direct-labelled. Blue and orange are deliberately absent: they carry the deviation direction.
+CAT = ["#4a3aa7", "#008300", "#e87ba4", "#eda100"]
 CAT_LABELS = {"reference_relative": "reference-relative", "raw_clr": "raw CLR", "alpha_diversity": "alpha diversity", "health_index": "GMHI (genus approx.)"}
 # sequential (density, hexbin): one blue hue light -> dark
 SEQ = ["#86b6ef", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]   # starts at ramp step 250 so the lightest bin clears 2:1 on white
@@ -45,8 +50,9 @@ HATCH = "////"
 #                              the milder class; DEV neutral grey = within the range. Used in fig1 (report rows), fig5,
 #                              fig10, fig12, fig13, fig14 (orange diamond = above the healthy 90th percentile), and for
 #                              the "cohort above the pre-set 8 % limit" mark in fig4 (an exceedance, i.e. a high call).
-#   CAT (4 slots) ............ the four feature sets of the classification benchmark only (fig8): percentiles, raw CLR,
-#                              alpha diversity, GMHI approximation. Fixed order, direct-labelled.
+#   CAT (4 slots) ............ the four feature sets of the classification benchmark only (fig8): percentiles (violet), raw
+#                              CLR (green), alpha diversity (magenta), GMHI approximation (yellow). Fixed order, direct-labelled;
+#                              no blue or orange, so a feature set is never mistaken for a deviation direction.
 #   SEQ blues ................ an ordinal magnitude: sample density per hex (fig7) and the assembly-size / read-depth
 #                              class of a study's samples (fig2 a, d). Never a category.
 #   INK greys ................ everything else: the two pipelines (filled light-grey box / solid bar = assembly pipeline,

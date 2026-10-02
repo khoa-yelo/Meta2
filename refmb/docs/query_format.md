@@ -8,7 +8,7 @@ required, UTF-8. Identifiers are the user's own; nothing depends on MGnify namin
 
 | file | required | columns | notes |
 |---|---|---|---|
-| `sample.json` | no | `sample_id`, `body_site`, `pipeline` {name, version, databases}, optional `age_years`, `country`, `condition` | `body_site` must equal the bundle's (Gut); the scorer refuses others with `NO_MATCHING_REFERENCE` |
+| `sample.json` | no | `sample_id`, `body_site`, `pipeline` {name, version, databases}, optional `age_years`, `country`, `condition` | `body_site` must equal the bundle's (Gut); the scorer refuses others with `NO_MATCHING_REFERENCE`. The container's `pv5_to_query.py` fills `pipeline.version` with the refmb version only when the refmb package is importable by the Python it runs under; inside the assembly image (Python 3.8) it is not, and the field reads `unknown` |
 | `contigs.tsv` | yes | `contig_id`, `length` (bp), `coverage` | ALL contigs of the assembly (used for total assembled length and so for the quality band). `coverage` is the per-contig read depth (metaSPAdes k-mer coverage, MEGAHIT `multi`, or read-mapping depth). Empty coverage: the CDS on that contig count with weight 0 |
 | `cds.tsv` | yes | `cds_id`, `contig_id`, `ko`, `pfam`, optional `ko_kofam` | one row per predicted CDS; `ko` and `pfam` are `;`- or `,`-separated lists (may be empty). `ko` is the KO source the reference uses (eggNOG-mapper); `ko_kofam` is a single best KOfam KO per CDS if available |
 | `cds_taxonomy.tsv` | yes | `cds_id` or `contig_id`, `taxid` | one NCBI taxid per CDS (best hit or lowest common ancestor of the protein search). Any rank works: the normalizer walks the lineage. If `contig_id` is given it is used directly |

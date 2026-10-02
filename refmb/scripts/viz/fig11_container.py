@@ -30,7 +30,7 @@ def jitter(n, seed):
 def make(out_dir):
     T.print_profile(); C, Q = load()
     fig = plt.figure(figsize=(T.DOUBLE_IN, 3.0))
-    gs = fig.add_gridspec(1, 3, width_ratios=[1.0, 1.85, 1.3], wspace=0.4, left=0.075, right=0.975, top=0.9, bottom=0.32)
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.0, 1.85, 1.3], wspace=0.4, left=0.075, right=0.965, top=0.9, bottom=0.32)
     # a assembled length
     ax = fig.add_subplot(gs[0]); single = Q["era"] == ERAS[0]
     lo, hi = 5, 2000

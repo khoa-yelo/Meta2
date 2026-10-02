@@ -10,14 +10,24 @@
    symmetric light steps, whose sign is carried by texture (45° vs 135°) in print.
 7. Colourblind check — the validator result recorded in tokens_validation.txt is required to say PASS for the sets used.
 8. Determinism — the SVG rendered twice is byte-identical (caller renders twice into two dirs and passes both).
+9. Text inside the page — every text span's bounding box (PyMuPDF, page.get_text("dict")) lies within page.rect with a
+   0.5 pt tolerance, so no title, axis label or tick label is clipped at the page edge. Needs the pymupdf package.
 """
 import json, os, re, sys
 import pypdf
+try:
+    import pymupdf as fitz
+except ImportError:   # older package name
+    try:
+        import fitz
+    except ImportError:
+        fitz = None
 
 sys.path.insert(0, os.path.dirname(__file__))
 import tokens as T
 
 TARGETS_MM = (88.9, 181.9)
+BBOX_TOL_PT = 0.5
 ALLOWED = {c.lower() for c in list(T.DEV.values()) + T.CAT + T.SEQ + list(T.INK.values()) + ["#000000", "#ffffff", "none"]}
 
 
@@ -25,6 +35,24 @@ def lum(hexc):
     r, g, b = [int(hexc[i:i + 2], 16) / 255 for i in (1, 3, 5)]
     f = lambda c: c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
     return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+
+
+def text_outside_page(pdf_path, tol=BBOX_TOL_PT):
+    """Text spans whose bbox leaves the page box by more than tol points: [(text, side, overshoot_pt)]."""
+    if fitz is None:
+        return None
+    doc = fitz.open(pdf_path); page = doc[0]; R = page.rect; out = []
+    for block in page.get_text("dict")["blocks"]:
+        for line in block.get("lines", []):
+            for span in line["spans"]:
+                x0, y0, x1, y1 = span["bbox"]; txt = span["text"].strip()
+                if not txt:
+                    continue
+                for side, over in (("left", R.x0 - x0), ("top", R.y0 - y0), ("right", x1 - R.x1), ("bottom", y1 - R.y1)):
+                    if over > tol:
+                        out.append((txt[:40], side, round(float(over), 1)))
+    doc.close()
+    return out
 
 
 def lint(pdf_path, svg_path, svg_path_rerun=None):
@@ -66,6 +94,12 @@ def lint(pdf_path, svg_path, svg_path_rerun=None):
     if svg_path_rerun:
         if open(svg_path, "rb").read() != open(svg_path_rerun, "rb").read():
             problems.append("non-deterministic: SVG differs between two renders")
+    outside = text_outside_page(pdf_path)
+    if outside is None:
+        problems.append("text-in-page check not run: the pymupdf package is not installed")
+    else:
+        for txt, side, over in outside:
+            problems.append(f"text outside the page box ({side} by {over} pt): '{txt}'")
     return {"file": os.path.basename(pdf_path), "width_mm": round(w_mm, 2), "fonts": fonts, "min_font_pt": round(min(sizes), 2) if sizes else None,
             "n_colours": len(colours), "problems": problems, "pass": not problems}
 

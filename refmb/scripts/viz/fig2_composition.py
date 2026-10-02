@@ -1,12 +1,14 @@
 """Figure 2 — what the baselines are made of (double column). a: assembly baseline by study (samples, stacked by
-assembly-size class as three ordinal blue steps). b: by country (filled bar = assembly pipeline). c: metadata completeness
-of the gut sample set from the curated metadata vs after the cMD3 accession join (two greys). d, e: the read baseline
-(cMD3 MetaPhlAn 3 profiles) by study, stacked by read-depth band, and by country (outlined bar = read pipeline)."""
+assembly-size class as three ordinal blue steps). b: by country (filled bar = assembly pipeline; countries from the curated
+sample table work/s12/A/meta.parquet, reference_pool role, ISO codes mapped to names so that e.g. TZA and Tanzania are one
+bar). c: metadata completeness of the gut sample set from the curated metadata vs after the cMD3 accession join (two greys).
+d, e: the read baseline (cMD3 MetaPhlAn 3 profiles) by study, stacked by read-depth class, and by country (outlined bar =
+read pipeline)."""
 import os, sys
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import tokens as T
-sys.path.insert(0, T.P); from refmb.paths import VER as _VER, VTAG as _VTAG, bundle_A as _bundle_A
+sys.path.insert(0, T.P); from refmb.paths import bundle_A as _bundle_A
 
 P = T.P
 BUNDLE = _bundle_A("lenient")
@@ -31,14 +33,16 @@ def make(out_dir):
     tab = tab.loc[tab.sum(axis=1).sort_values(ascending=False).index]
     left = np.zeros(len(tab))
     for b in ["low", "medium", "high"]:
-        ax.barh(np.arange(len(tab)), tab[b], left=left, color=BAND_COL[b], height=0.72, linewidth=0.6, edgecolor=T.INK["surface"], label=f"{b} band")
+        ax.barh(np.arange(len(tab)), tab[b], left=left, color=BAND_COL[b], height=0.72, linewidth=0.6, edgecolor=T.INK["surface"], label=f"{b} size class")
         left += tab[b].to_numpy()
     ax.set_yticks(np.arange(len(tab))); ax.set_yticklabels(tab.index); ax.invert_yaxis(); ax.tick_params(axis="y", length=0)
     ax.set_xlabel("reference samples"); ax.set_title(f"a  assembly pipeline:\n{len(pool):,} healthy adults, {len(tab)} studies", loc="left")
     ax.legend(loc="lower right", frameon=False, handlelength=1.0, handletextpad=0.4)
     # b — by country
     ax = fig.add_subplot(gs[0, 1])
-    c = pool["cur_Country"].replace("", "not reported").value_counts()
+    meta = pd.read_parquet(f"{P}/work/s12/A/meta.parquet"); meta = meta[meta["role"] == "reference_pool"]
+    assert len(meta) == len(pool), f"pool size differs between inventory ({len(pool)}) and work/s12/A/meta.parquet ({len(meta)})"
+    c = meta["country"].fillna("").replace("", "not reported").map(lambda k: ISO.get(k, k)).value_counts()
     top = c.head(7); other = c.iloc[7:].sum()
     if other: top = pd.concat([top, pd.Series({"other": other})])
     ax.barh(np.arange(len(top)), top.to_numpy(), height=0.72, **T.BAR_ASSEMBLY)
@@ -68,7 +72,7 @@ def make(out_dir):
     tab = B.pivot_table(index="study", columns="depth_band", values="sample_key", aggfunc="count", fill_value=0).reindex(columns=["low", "medium", "high"], fill_value=0)
     tab = tab.loc[tab.sum(axis=1).sort_values(ascending=False).index]; left = np.zeros(len(tab))
     for b in ["low", "medium", "high"]:
-        ax.barh(np.arange(len(tab)), tab[b], left=left, color=BAND_COL[b], height=0.72, linewidth=0.6, edgecolor=T.INK["surface"], label=f"{b} depth")
+        ax.barh(np.arange(len(tab)), tab[b], left=left, color=BAND_COL[b], height=0.72, linewidth=0.6, edgecolor=T.INK["surface"], label=f"{b} depth class")
         left += tab[b].to_numpy()
     ax.set_yticks(np.arange(len(tab))); ax.set_yticklabels(tab.index); ax.invert_yaxis(); ax.tick_params(axis="y", length=0)
     ax.set_xlabel("reference samples"); ax.set_title(f"d  read pipeline:\n{len(B):,} healthy adults, {len(tab)} studies", loc="left")

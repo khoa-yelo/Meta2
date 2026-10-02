@@ -84,7 +84,7 @@ def bundle(tmp_path_factory):
 
 
 def test_version():
-    assert refmb.__version__ == "0.8.1"
+    assert refmb.__version__ == "0.8.2"
 
 
 def test_parse_normalize_score(bundle, tmp_path):
