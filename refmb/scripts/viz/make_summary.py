@@ -3,31 +3,32 @@
 no external scripts). Figures are re-rendered from figures/*.pdf at 150 dpi with pdftoppm; captions come from
 make_figures.CAPTIONS; every number in the tables is read from a results file (paths listed under each table).
 The page is validated by parsing it with html.parser and decoding every embedded image."""
-import base64, glob, html, io, json, os, re, subprocess, sys, tempfile
+import base64, html, io, json, os, re, subprocess, sys, tempfile
 from html.parser import HTMLParser
-import numpy as np, pandas as pd
+import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tokens as T, example_case as EC
-from make_figures import CAPTIONS, FIGS, MANUSCRIPT, newest_draft
+from make_figures import CAPTIONS, ORDERED, MANUSCRIPT, newest_draft
+import fig7_landscape as F7
 
 P = T.P; FIG = f"{P}/figures"; OUT = f"{FIG}/summary.html"
 
 LAYER = {"taxonomy_family": "family", "taxonomy_genus": "genus", "taxonomy_species": "species", "ko_eggnog": "KO (eggNOG)", "ko_kofam": "KO (KOfam)", "pfam": "Pfam", "module": "KEGG module",
          "ko_humann": "KO (HUMAnN 3)", "pathway_humann": "pathway (MetaCyc)"}
 A_LAYERS = ["taxonomy_family", "taxonomy_genus", "ko_eggnog", "ko_kofam", "pfam", "module"]; B_LAYERS = ["taxonomy_family", "taxonomy_genus", "taxonomy_species", "ko_humann", "pathway_humann"]
-ORDER = ["fig1_schematic", "fig5_tree", "fig13_gene_report", "fig14_sample_card", "fig4_calibration", "fig11_container", "fig10_disease_atlas", "fig12_disease_strata", "fig9_strata", "fig8_performance", "fig7_landscape", "fig2_composition"]
+ORDER = ORDERED   # manuscript order (main figures, supplementary, then figures not in the current draft), from make_figures
 TAKEAWAY = {   # one sentence per figure, for the reader in a hurry (the caption carries the detail)
     "fig1_schematic": "A user runs one of two standard pipelines on raw reads and gets, for every taxon, gene and pathway, a percentile among healthy adults measured the same way; panel (b) is the report as the user sees it.",
     "fig5_tree": "The family-level report of one C. difficile infection sample: every deviation is on the low side, in the main anaerobic families.",
-    "fig13_gene_report": "The same report on genes and pathways says when a sample deviates (C. difficile case) and when it does not (colorectal cancer case).",
+    "fig13_gene_report": "The same report on genes says when a sample deviates (C. difficile case) and when it does not (colorectal cancer case); the sparse module and pathway layers are summarised in one line each.",
     "fig14_sample_card": "Sample-level numbers are read against the healthy spread; the share outside alone separates little, the count of missing genes is what stands out for the C. difficile case.",
     "fig4_calibration": "Independent healthy cohorts fall near the expected 5 % of features outside the healthy range on most layers; the exceptions are named.",
     "fig11_container": "The container reproduces MGnify's analysis from raw reads: Spearman 0.98–1.00 on gene layers, 0.86–0.88 on taxonomy.",
     "fig10_disease_atlas": "Across independent colorectal cancer studies a shared block of genera is lower in cases; the two inflammatory bowel disease studies share a block that is higher.",
     "fig12_disease_strata": "Colorectal cancer shifts keep their direction within age, sex and BMI groups; regional differences cannot be separated from study.",
     "fig9_strata": "The baseline holds across age, sex and BMI groups of healthy adults; it does not fit African cohorts (20 % of families outside in the assembly pipeline).",
-    "fig8_performance": "Percentiles transfer between studies modestly better than raw abundances (A: 0.618 vs 0.581, p = 0.021; B taxonomy: 0.690 vs 0.664, p = 0.052); function layers show no advantage.",
-    "fig7_landscape": "Position on the healthy map mostly reflects richness (PC1 correlates at 0.93 with the number of assessed families); the independent healthy cohort lies in the dense half of the cloud, the C. difficile cases at its edge.",
+    "fig8_performance": "Percentiles transfer between studies modestly better than raw abundances (assembly pipeline: 0.618 vs 0.581, p = 0.021; read pipeline, taxonomy: 0.690 vs 0.664, p = 0.052); function layers show no advantage.",
+    "fig7_landscape": "{fig7}",   # filled in build() from fig7_landscape.stats()
     "fig2_composition": "What the baselines are made of: a few large European and North American studies dominate both; curated metadata adds health status, age and sex.",
 }
 REPORTS = [("Calibration, assembly pipeline (A)", "results/s6/report_v08_lenient_base.md"), ("Leave-one-study-out calibration, A", "results/s6/loso_within_pool.md"),
@@ -69,7 +70,7 @@ def tables_A():
     fid = pd.DataFrame({"layer": [LAYER[l] for l in fid.index], "samples": fid["n"].astype(int).values, "median Spearman of percentiles, container vs MGnify": fid["rho"].round(3).values,
                         "mean % outside, container vs MGnify": [f"{100*a:.1f} vs {100*b:.1f}" for a, b in zip(fid["fo_c"], fid["fo_n"])], "median call agreement": fid["agree"].round(3).values})
     L = pd.read_csv(f"{P}/results/s8/loso_auroc.tsv", sep="\t"); per = L[L["study"] != "POOLED"]
-    mac = per.groupby("feature_set")["auroc_loso"].mean(); pooled = L[L["study"] == "POOLED"].set_index("feature_set")["auroc_loso"] if (L["study"] == "POOLED").any() else None
+    mac = per.groupby("feature_set")["auroc_loso"].mean()
     pair = md_table(f"{P}/results/s8/report.md", "Paired comparison").set_index("comparison")
     names = {"reference_relative": "percentiles (reference-relative)", "raw_clr": "raw CLR", "alpha_diversity": "alpha diversity", "health_index": "GMHI (genus-level approximation)"}
     cc = []
@@ -147,14 +148,16 @@ ul.reports{columns:2;column-gap:28px;padding-left:18px;font-size:14px}ul.reports
 def build():
     sys.path.insert(0, P); from refmb.paths import bundle_A
     mA = json.load(open(f"{bundle_A()}/manifest.json")); mB = json.load(open(f"{P}/refs/gut-reads-adult-global-v0.2-lenient/manifest.json"))
-    calA, fidA, ccA, strictA = tables_A(); calB, fidB, fidB_note, ccB = tables_B(); c = EC.counts()
+    calA, fidA, ccA, strictA = tables_A(); calB, fidB, fidB_note, ccB = tables_B(); c = EC.counts(); s7 = F7.stats()
+    TAKEAWAY["fig7_landscape"] = (f"On the healthy map drawn from the bundle's stored coordinates, {'none' if round(s7['frac_outside95_heldout'] * s7['n_heldout']) == 0 else round(s7['frac_outside95_heldout'] * s7['n_heldout'])} of the "
+                                  f"{s7['n_heldout']} independent healthy samples and {100 * s7['frac_outside95_cdi']:.0f} % of the C. difficile cases lie outside the 95 % contour; PC1 tracks richness (Spearman ρ = {s7['rho_PC1_n_assessed']:.2f} with assessed families).")
     imgs = {s: png_b64(s) for s in ORDER}
     H = [f"<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>refmb summary</title><style>{CSS}</style></head><body><main>",
          "<h1>refmb: gut metagenome pipelines bundled with healthy reference baselines</h1>",
-         "<p class='sub'>Project summary for a five-minute read. Figures are the current figure set (figures/*.pdf); the tag after each heading gives the figure's number in the manuscript, and every number below is read from a results file named under the table. Authors and repository: [TBD].</p>",
+         "<p class='sub'>Project summary for a five-minute read. Figures are the current figure set (figures/*.pdf) in manuscript order; the tag after each heading gives the figure's number in the manuscript (or says that the current draft does not include it), and every number below is read from a results file named under the table. Authors and repository: [TBD].</p>",
          "<div class='lead'>",
          f"<p>A reference genome makes a genome interpretable because every observation is placed against a shared, versioned baseline. Gut microbiome profiles have no such baseline: each study decides what is normal from its own controls, so a single sample cannot be interpreted and results from different studies are not on one scale. refmb ships two standard analysis pipelines for gut metagenomes, each with a healthy-adult baseline measured by that same pipeline. The <strong>assembly pipeline (A)</strong> is a pinned container that reproduces the MGnify v5 analysis; its baseline holds {mA['n_samples']:,} healthy adults from {mA['n_studies']} studies with family, genus, KEGG ortholog (two annotators), Pfam and KEGG module layers. The <strong>read pipeline (B)</strong> runs MetaPhlAn 3.0.14 (HUMAnN 3 optional) and reproduces curatedMetagenomicData 3; its baseline holds {mB['n_samples']:,} healthy adults from {mB['n_studies']} studies with family, genus, species, KO and pathway layers. A user supplies raw reads and receives, for every feature, its percentile among healthy adults and a call (within, low or high the healthy range of 2.5–97.5), a list of expected-but-missing features, and the sample's share of features outside the range. Baselines are distributed as statistics only.</p>",
-         "<p>The baseline is checked before it is used. Healthy cohorts that never entered a baseline fall near the expected 5 % of features outside the healthy range on most layers, and both pipelines reproduce the original analyses from raw reads (gene layers at Spearman 0.98–1.00, taxonomy at 0.86–0.88 for the assembly pipeline; 0.997–0.999 for the read pipeline). On real data the report shows, for one <em>C. difficile</em> infection sample, {c['n_low']} of {c['n_assessed']} assessed families below the healthy range and {EC.none_or(c['n_high'])} above; across nine independent colorectal cancer studies, Lachnospiraceae and other butyrate-associated taxa are lower in cases by 23–35 percentile points, and these shifts keep their direction within age, sex and BMI groups. The weak results are stated as plainly: percentiles beat raw abundances in cross-study classification only modestly (A: AUROC 0.618 vs 0.581, p = 0.021, not significant on the strict baseline, p = 0.051; B taxonomy: 0.690 vs 0.664, p = 0.052; function layers show no advantage), only 14 of 43 literature expectations are confirmed in A, African cohorts do not fit the assembly baseline (19.8 % of families outside), the read pipeline's function layers are not validated from raw reads, and region is confounded with study.</p>",
+         f"<p>The baseline is checked before it is used. Healthy cohorts that never entered a baseline fall near the expected 5 % of features outside the healthy range on most layers, and both pipelines reproduce the original analyses from raw reads (gene layers at Spearman 0.98–1.00, taxonomy at 0.86–0.88 for the assembly pipeline; 0.997–0.999 for the read pipeline). On real data the report shows, for one <em>C. difficile</em> infection sample, {c['n_low']} of {c['n_assessed']} assessed families below the healthy range and {EC.none_or(c['n_high'])} above; across nine independent colorectal cancer studies, Lachnospiraceae and other butyrate-associated taxa are lower in cases by 23–35 percentile points, and these shifts keep their direction within age, sex and BMI groups. The weak results are stated as plainly: percentiles beat raw abundances in cross-study classification only modestly (A: AUROC 0.618 vs 0.581, p = 0.021, not significant on the strict baseline, p = 0.051; B taxonomy: 0.690 vs 0.664, p = 0.052; function layers show no advantage), only 14 of 43 literature expectations are confirmed in A, African cohorts do not fit the assembly baseline (19.8 % of families outside), the read pipeline's function layers are not validated from raw reads, and region is confounded with study.</p>",
          "</div>",
          "<div class='kpis'>",
          f"<div class='kpi a'><b>{mA['n_samples']:,} / {mA['n_studies']}</b><span>healthy adults / studies, assembly baseline (A, v0.8)</span></div>",
@@ -182,7 +185,7 @@ def build():
     H.append(f"<p class='note'>{html.escape(fidB_note)}</p>")
     H.append(tab_html(ccB, "Case/control: cross-study leave-one-study-out, mean AUROC over held-out studies; percentiles vs raw CLR, one-sided Wilcoxon", "results/s11/pipelineB_report.md (Case/control, cross-study leave-one-study-out)"))
     H.append("<h2>Detailed reports</h2><ul class='reports'>" + "".join(f"<li>{html.escape(a)}: <code>{html.escape(b)}</code></li>" for a, b in REPORTS) + "</ul>")
-    H.append(f"<p class='note'>Paths are relative to the project root <code>{html.escape(P)}</code>. Reference bundles (<code>refs/</code>) and the container image (<code>release/refmb_tierA.sif</code>) are distributed separately from the code repository.</p>")
+    H.append("<p class='note'>Paths are relative to the project root. Reference bundles (<code>refs/</code>) and the container image (<code>release/refmb_tierA.sif</code>) are distributed separately from the code repository.</p>")
     H.append("</main></body></html>")
     open(OUT, "w", encoding="utf-8").write("\n".join(H)); return OUT
 

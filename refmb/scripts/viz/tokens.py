@@ -31,9 +31,11 @@ FONT = "DejaVu Sans"
 # --- deviation scale: 5 diverging steps, blue (low) -> neutral -> orange (high); lightness differs as well as hue
 DEV = {"low_deep": "#1c5cab", "low_light": "#5598e7", "neutral": "#a9a7a1", "high_light": "#e07f3b", "high_deep": "#b8460f"}
 DEV_ORDER = ["low_deep", "low_light", "neutral", "high_light", "high_deep"]
-# categorical, fixed order (reference palette slots 7, 6, 5, 4: violet, green, magenta, yellow), used for the four feature sets of
-# the classification benchmark; direct-labelled. Blue and orange are deliberately absent: they carry the deviation direction.
-CAT = ["#4a3aa7", "#008300", "#e87ba4", "#eda100"]
+# categorical, fixed order (purple, green, magenta, yellow), used only for the four feature sets of the classification benchmark
+# (fig8); direct-labelled. Blue and orange are deliberately absent: they carry the deviation direction. Validated with the dataviz
+# validator (tokens_validation.txt): all checks pass within the set; the purple also clears the normal-vision floor against the
+# deviation blue (ΔE 16.5), which it never shares a figure with.
+CAT = ["#8a3ab9", "#008300", "#e87ba4", "#eda100"]
 CAT_LABELS = {"reference_relative": "reference-relative", "raw_clr": "raw CLR", "alpha_diversity": "alpha diversity", "health_index": "GMHI (genus approx.)"}
 # sequential (density, hexbin): one blue hue light -> dark
 SEQ = ["#86b6ef", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]   # starts at ramp step 250 so the lightest bin clears 2:1 on white
@@ -50,7 +52,7 @@ HATCH = "////"
 #                              the milder class; DEV neutral grey = within the range. Used in fig1 (report rows), fig5,
 #                              fig10, fig12, fig13, fig14 (orange diamond = above the healthy 90th percentile), and for
 #                              the "cohort above the pre-set 8 % limit" mark in fig4 (an exceedance, i.e. a high call).
-#   CAT (4 slots) ............ the four feature sets of the classification benchmark only (fig8): percentiles (violet), raw
+#   CAT (4 slots) ............ the four feature sets of the classification benchmark only (fig8): percentiles (purple), raw
 #                              CLR (green), alpha diversity (magenta), GMHI approximation (yellow). Fixed order, direct-labelled;
 #                              no blue or orange, so a feature set is never mistaken for a deviation direction.
 #   SEQ blues ................ an ordinal magnitude: sample density per hex (fig7) and the assembly-size / read-depth

@@ -1,0 +1,20 @@
+# Worked example MGYA00694698 (study PRJEB26165, C. difficile infection), scored against the assembly baseline rebuilt without PRJEB26165 (work/s8/scores). Written by scripts/viz/example_case.py.
+table	sample	layer	feature_id	name	n_assessed	n_outside	frac_outside	n_missing	n_low	n_high	share_cases_low	share_cases_high	case_call	case_percentile
+layer_counts_all_assessed	MGYA00694698	taxonomy_family			120.0	18.0	0.15	7.0						
+layer_counts_all_assessed	MGYA00694698	taxonomy_genus			214.0	28.0	0.1308	34.0						
+layer_counts_all_assessed	MGYA00694698	ko_eggnog			4438.0	243.0	0.0548	179.0						
+layer_counts_all_assessed	MGYA00694698	ko_kofam			3460.0	114.0	0.0329	136.0						
+layer_counts_all_assessed	MGYA00694698	pfam			3881.0	231.0	0.0595	376.0						
+layer_counts_all_assessed	MGYA00694698	module			198.0	1.0	0.0051	2.0						
+leaf_families_232	MGYA00694698	taxonomy_family			103	17	0.165	7	17	0				
+family_share_of_56_cases	MGYA00694698	taxonomy_family	216572	Oscillospiraceae							0.536	0.0	low	0.5
+family_share_of_56_cases	MGYA00694698	taxonomy_family	3085642	Butyricicoccaceae							0.321	0.0	low	0.5
+family_share_of_56_cases	MGYA00694698	taxonomy_family	815	Bacteroidaceae							0.321	0.0	low	0.5
+family_share_of_56_cases	MGYA00694698	taxonomy_family	31953	Bifidobacteriaceae							0.304	0.0	low	0.5
+family_share_of_56_cases	MGYA00694698	taxonomy_family	186803	Lachnospiraceae							0.286	0.0	low	2.5
+family_share_of_56_cases	MGYA00694698	taxonomy_family	186806	Eubacteriaceae							0.25	0.0	low	2.1
+family_share_of_56_cases	MGYA00694698	taxonomy_family	128827	Erysipelotrichaceae							0.25	0.018	low	0.5
+family_share_of_56_cases	MGYA00694698	taxonomy_family	2842328	Salasmaviridae							0.0	0.5	unscored	
+family_share_of_56_cases	MGYA00694698	taxonomy_family	2560065	Herelleviridae							0.0	1.0	unscored	
+family_share_of_56_cases	MGYA00694698	taxonomy_family	2004	Streptosporangiaceae							0.0	0.5	unscored	
+family_share_of_56_cases	MGYA00694698	taxonomy_family	3029088	Dethiosulfovibrionaceae							0.0	0.273	unscored	

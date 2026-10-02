@@ -68,7 +68,7 @@ def make(out_dir):
     ax.text(rx + 0.07, yA + h - 0.3, "per feature", fontsize=T.PT_MIN, va="top", color=T.INK["primary"])
     ax.text(rx + 0.19, yA + h - 0.46, "percentile among\nhealthy adults\nwithin, low or high\nexpected but missing", fontsize=T.PT_MIN, va="top", color=T.INK["secondary"], linespacing=1.3)
     ax.text(rx + 0.07, yA + h - 1.18, "per sample", fontsize=T.PT_MIN, va="top", color=T.INK["primary"])
-    ax.text(rx + 0.19, yA + h - 1.34, "share outside the\nhealthy range, with\na test against the\nexpected ~5 %\nposition on the\nhealthy map", fontsize=T.PT_MIN, va="top", color=T.INK["secondary"], linespacing=1.3)
+    ax.text(rx + 0.19, yA + h - 1.34, "share outside the\nhealthy range, with\na test against the\nexpected ~5 %", fontsize=T.PT_MIN, va="top", color=T.INK["secondary"], linespacing=1.3)
     for y, ls in ((yA + h / 2, "-"), (yB + h / 2, SB["linestyle"])):
         for x0, x1 in [(3.7, 4.0), (5.6, 5.85), (8.1, 8.4)]:
             arrow(ax, x0, y, x1, y, ls)

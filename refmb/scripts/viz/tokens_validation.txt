@@ -64,3 +64,56 @@ Deviation scale (diverging, blue<->orange, neutral midpoint #a9a7a1):
   Mitigations shipped: 'within' marks are small and unlabelled; deviation marks are larger, labelled with leaders,
   and carry ordered texture (45° low / 135° high) in print so sign survives greyscale and CVD.
 Sequential (hexbin density): one blue hue, starts at ramp step 250 (#86b6ef, 2.06:1), monotone L, gaps >= 0.06.
+
+=== 2026-10-02 (round 4): categorical set recoloured so that no feature set shares a hue with the deviation scale
+Command: python validate_palette.py "#4a3aa7,#008300,#e87ba4,#eda100" --mode light   (and --pairs all)
+Palette (light, surface #fcfcfb, categorical): 4 slots
+  [PASS] Lightness band         all 4 inside L 0.43–0.77
+  [PASS] Chroma floor           all 4 >= 0.1
+  [PASS] CVD separation         worst adjacent #eda100↔#e87ba4 ΔE 16.3 (deutan) · tritan 5.8
+  [PASS] Normal-vision floor    worst adjacent #eda100↔#e87ba4 ΔE 19.6 (normal)
+  [WARN] Contrast vs surface    below 3:1 — relief required (visible labels or table view): [["#e87ba4",2.62],["#eda100",2.11]]
+  → ALL CHECKS PASS  (all-pairs run: worst pair #eda100↔#008300 ΔE 16.2 (protan); also ALL CHECKS PASS)
+Reading: CAT = violet #4a3aa7 (percentiles), green #008300 (raw CLR), magenta #e87ba4 (alpha diversity), yellow #eda100 (GMHI approx.).
+Contrast WARN on magenta/yellow -> relief rule met: every series is named in the legend and in the row labels of the mean panels,
+and the AUROC values are printed beside the marks and in the manuscript table. The previous set (#2a78d6, #eb6834, #1baf7a,
+#eda100) reused the deviation blue and orange and is retired.
+
+=== 2026-10-02, round 4: new categorical set (Fig 8, 4 feature sets: purple, green, magenta, yellow), light, white print surface
+
+Palette (light, surface #ffffff, categorical): 4 slots
+  [PASS] Lightness band         all 4 inside L 0.43–0.77
+  [PASS] Chroma floor           all 4 >= 0.1
+  [PASS] CVD separation         worst adjacent #eda100↔#e87ba4 ΔE 16.3 (deutan) · tritan 5.8
+  [PASS] Normal-vision floor    worst adjacent #eda100↔#e87ba4 ΔE 19.6 (normal)
+  [WARN] Contrast vs surface    below 3:1 — relief required (visible labels or table view): [["#e87ba4",2.69],["#eda100",2.17]]
+
+  → ALL CHECKS PASS  (CVD in the 6–8 floor band is legal ONLY with secondary encoding: direct labels, gaps, or texture)
+  scope: categorical palettes only. For a lone status/text color check WCAG text contrast; for a sequential ramp, lightness monotonicity.
+
+
+=== same set, all pairs
+
+Palette (light, surface #ffffff, categorical): 4 slots
+  [PASS] Lightness band         all 4 inside L 0.43–0.77
+  [PASS] Chroma floor           all 4 >= 0.1
+  [PASS] CVD separation         worst all-pairs #eda100↔#008300 ΔE 16.2 (protan) · tritan 5.8
+  [PASS] Normal-vision floor    worst all-pairs #eda100↔#e87ba4 ΔE 19.6 (normal)
+  [WARN] Contrast vs surface    below 3:1 — relief required (visible labels or table view): [["#e87ba4",2.69],["#eda100",2.17]]
+
+  → ALL CHECKS PASS  (CVD in the 6–8 floor band is legal ONLY with secondary encoding: direct labels, gaps, or texture)
+  scope: categorical palettes only. For a lone status/text color check WCAG text contrast; for a sequential ramp, lightness monotonicity.
+
+
+=== cross-check: purple against the deviation blues (never in the same figure; normal-vision floor passes, CVD separation from blue is not reachable for any purple and is not required across figures)
+
+Palette (light, surface #ffffff, categorical): 3 slots
+  [PASS] Lightness band         all 3 inside L 0.43–0.77
+  [PASS] Chroma floor           all 3 >= 0.1
+  [FAIL] CVD separation         worst all-pairs #1c5cab↔#8a3ab9 ΔE 4.0 (protan) · tritan 14.8
+  [PASS] Normal-vision floor    worst all-pairs #1c5cab↔#8a3ab9 ΔE 16.5 (normal)
+  [WARN] Contrast vs surface    below 3:1 — relief required (visible labels or table view): [["#5598e7",2.99]]
+
+  → FAILED — fix the marked checks  (CVD in the 6–8 floor band is legal ONLY with secondary encoding: direct labels, gaps, or texture)
+  scope: categorical palettes only. For a lone status/text color check WCAG text contrast; for a sequential ramp, lightness monotonicity.
+

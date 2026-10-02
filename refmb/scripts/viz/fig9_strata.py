@@ -2,7 +2,7 @@
 band for healthy adults, by age, sex, BMI, westernization and region. a: pipeline A (assembly), b: pipeline B (reads).
 Two layers per pipeline; the 8 % gate is drawn; n samples (studies) is written beside each stratum."""
 import os, sys
-import numpy as np, pandas as pd
+import pandas as pd
 import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import tokens as T
 

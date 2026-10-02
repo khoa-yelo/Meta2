@@ -69,3 +69,25 @@ def none_or(n):
 
 if __name__ == "__main__":
     print(counts()); print(layer_counts())
+
+
+def write_table(out=None):
+    """Write every number the worked example uses to one results file: sample-level counts per layer (all assessed features),
+    the leaf-family counts (232 common families) and the per-family share of the study's cases called low or high."""
+    out = out or os.path.join(T.P, "results", "paper", "example_case_counts.tsv")
+    rows = []
+    for layer, r in layer_counts().iterrows():
+        rows.append({"table": "layer_counts_all_assessed", "sample": CASE, "layer": layer, "feature_id": "", "name": "", "n_assessed": r["n_assessed"], "n_outside": r["n_outside"], "frac_outside": round(r["frac_outside_raw"], 4), "n_missing": r["n_missing"], "n_low": "", "n_high": "", "share_cases_low": "", "share_cases_high": ""})
+    c = counts(); rows.append({"table": "leaf_families_232", "sample": CASE, "layer": "taxonomy_family", "feature_id": "", "name": "", "n_assessed": c["n_assessed"], "n_outside": c["n_outside"], "frac_outside": round(c["frac_outside"], 4), "n_missing": c["n_missing"], "n_low": c["n_low"], "n_high": c["n_high"], "share_cases_low": "", "share_cases_high": ""})
+    inv = pd.read_parquet(os.path.join(T.P, "work", "s0", "inventory.parquet"), columns=["analysis_id", "study_bioproject", "cur_Health_status_group", "is_primary_analysis"]).set_index("analysis_id")
+    sc = pd.read_parquet(os.path.join(T.P, "work", "s8", "scores", f"{STUDY}.parquet"), filters=[("layer", "==", "taxonomy_family")])
+    cases = [a for a in sc["analysis_id"].unique() if inv.loc[a, "study_bioproject"] == STUDY and inv.loc[a, "cur_Health_status_group"] == "Diseased" and inv.loc[a, "is_primary_analysis"]]
+    sc = sc[sc["analysis_id"].isin(cases) & sc["feature_id"].isin(leaves())]; nm = names(); one = case_families()
+    fr = sc.assign(lo=sc["call"] == "low", hi=sc["call"] == "high").groupby("feature_id")[["lo", "hi"]].mean()
+    for fid, r in fr[(fr["lo"] >= 0.25) | (fr["hi"] >= 0.25)].sort_values("lo", ascending=False).iterrows():
+        rows.append({"table": f"family_share_of_{len(cases)}_cases", "sample": CASE, "layer": "taxonomy_family", "feature_id": fid, "name": nm.get(fid, fid), "n_assessed": "", "n_outside": "", "frac_outside": "", "n_missing": "", "n_low": "", "n_high": "", "share_cases_low": round(r["lo"], 3), "share_cases_high": round(r["hi"], 3), "case_call": one["call"].get(fid, ""), "case_percentile": round(one["percentile"].get(fid, float("nan")), 1)})
+    df = pd.DataFrame(rows)
+    with open(out, "w") as f:
+        f.write(f"# Worked example {CASE} (study {STUDY}, C. difficile infection), scored against the assembly baseline rebuilt without {STUDY} (work/s8/scores). Written by scripts/viz/example_case.py.\n")
+        df.to_csv(f, sep="\t", index=False)
+    return out

@@ -1,10 +1,15 @@
-"""Figure 13 — what a user gets on the gene and pathway layers (double column, 2 x 2): the radial deviation map of Fig. 5
-applied to (a) KEGG orthologs and (b) KEGG module completeness for the same C. difficile case (pipeline A), and to
-(c) KEGG orthologs and (d) MetaCyc pathways for one colorectal cancer case (pipeline B, FengQ_2015). Leaves are the features
-with reference prevalence >= 50 % in the sample's band, ordered by functional class (KEGG BRITE ko00001 level 2 for KOs,
-KEGG module class, pathway type from the MetaCyc name). Mark radius = the sample's percentile; grey band = 2.5–97.5; outer
-ring = share of the cohort's cases called high (orange) or low (blue); labelled = out of band in this sample and in >= 25 %
-of the cohort. The per-layer counts of both example samples are written to results/s14/example_reports.tsv."""
+"""Figure 13 — what a user gets on the gene layers (double column, two radial reports side by side, about 100 mm tall): the
+radial deviation map of Fig. 5 applied to (a) KEGG orthologs (eggNOG annotation) for the same C. difficile case (assembly
+pipeline) and to (b) KEGG orthologs (HUMAnN 3) for one colorectal cancer case (read pipeline, FengQ_2015). The sparse
+layers of the same two samples, KEGG module completeness (assembly) and MetaCyc pathways (read), are not drawn: their rings
+carried almost no information at print size, so each is summarised in one text line under the ring of its sample
+("1 of 188 modules outside ...", "5 of 320 pathways outside ..."). Leaves are the features with reference prevalence >= 50 % in
+the sample's class, ordered by functional class (KEGG BRITE ko00001 level 2). Mark radius = the sample's percentile; grey
+ring = 2.5–97.5; outer ring = histogram per 5° sector of features called high (orange) or low (blue) in >= 25 % of the
+cohort's cases; numbered = out of range in this sample and in >= 25 % of the cohort, the MAX_LAB most frequent listed in full.
+Per-layer counts of both samples on all four layers are compared with results/s14/example_reports.tsv (the data columns:
+features, assessed, low, high, expected_but_missing, cohort_cases); a differing table is written beside the figure for review.
+The TSV's 'labelled' column is a presentation count from an earlier version and is not compared."""
 import json, os, re, sys
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
@@ -16,6 +21,7 @@ P = T.P
 A_STUDY, A_CASE = "PRJEB26165", "MGYA00694698"          # the case shown in Fig. 5
 B_STUDY = "FengQ_2015"
 MIN_PREV = 0.5; FREQ = 0.25; MAX_LAB = 8   # the eight most frequent shared deviations are numbered and listed in full
+DATA_COLS = ["features", "assessed", "low", "high", "expected_but_missing", "cohort_cases"]   # compared with results/s14/example_reports.tsv
 SHORT = {"Carbohydrate metabolism": "Carbohydrate", "Energy metabolism": "Energy", "Lipid metabolism": "Lipid", "Nucleotide metabolism": "Nucleotide",
          "Amino acid metabolism": "Amino acid", "Metabolism of other amino acids": "Other amino acids", "Glycan biosynthesis and metabolism": "Glycan",
          "Metabolism of cofactors and vitamins": "Cofactors, vitamins", "Metabolism of terpenoids and polyketides": "Terpenoids", "Biosynthesis of other secondary metabolites": "Secondary metab.",
@@ -63,10 +69,20 @@ def table(scores, ref, cases, sample, names, classes, name_short):
     d["ord"] = d["cls"].map({c: k for k, c in enumerate(ORDER)}).fillna(len(ORDER)); d = d.sort_values(["ord", "cls", "name"]); return d
 
 
+def summary(d, ncases):
+    """Counts of one layer for one sample: features (leaves), assessed, low, high, expected-but-missing, cohort cases and the
+    number of features meeting the labelling criterion (outside in this sample and in >= FREQ of the cohort)."""
+    p = d["pct"].to_numpy(); call = d["call"].to_numpy()
+    ok = ~np.isnan(p) & np.isin(call, ["within", "low", "high"]); lo_ = ok & (call == "low"); hi_ = ok & (call == "high")
+    freq = np.maximum(d["cohort_high"].to_numpy(), d["cohort_low"].to_numpy())
+    return {"features": int(len(d)), "assessed": int(ok.sum()), "low": int(lo_.sum()), "high": int(hi_.sum()), "expected_but_missing": int((call == "expected_but_missing").sum()),
+            "cohort_cases": int(ncases), "labelled": int(((lo_ | hi_) & (freq >= FREQ)).sum())}
+
+
 def radial(ax, d, title, ncases, cls_min=12):
     n = len(d); theta = np.linspace(0, 2 * np.pi, n, endpoint=False) + np.pi / 2; r_in, r_out = 1.25, 2.0
     rp = lambda p: r_in + (r_out - r_in) * np.clip(p, 0, 100) / 100
-    ax.set_aspect("equal"); ax.axis("off"); ax.set_xlim(-4.45, 4.45); ax.set_ylim(-3.45, 3.45); k_cls = 0
+    ax.set_aspect("equal"); ax.axis("off"); ax.set_xlim(-4.8, 4.8); ax.set_ylim(-3.72, 3.72); k_cls = 0   # 9.6 x 7.44 data units; room for the class labels
     ax.add_patch(Wedge((0, 0), rp(97.5), 0, 360, width=rp(97.5) - rp(2.5), facecolor=T.INK["grid"], edgecolor="none", zorder=0))
     for p in (2.5, 50, 97.5):
         ax.add_patch(plt.Circle((0, 0), rp(p), fill=False, edgecolor=T.INK["axis"], lw=0.4, zorder=1))
@@ -126,7 +142,7 @@ def radial(ax, d, title, ncases, cls_min=12):
     n_out = int(out.sum()); n_ass = int(ok.sum())
     ax.text(0, 0, f"{n:,} features\n{n_out} of {n_ass:,}\noutside ({n_out / max(1, n_ass):.0%})\n{int(miss.sum())} expected,\nmissing", ha="center", va="center", fontsize=T.PT_MIN, color=T.INK["secondary"])
     ax.set_title(title, loc="left", fontsize=T.PT_TITLE, pad=2)
-    return listed, {"features": n, "assessed": n_ass, "low": int(lo_.sum()), "high": int(hi_.sum()), "expected_but_missing": int(miss.sum()), "cohort_cases": ncases, "labelled": len(cand)}
+    return listed, summary(d, ncases)
 
 
 def make(out_dir):
@@ -151,25 +167,39 @@ def make(out_dir):
     KW = [("biosynthesis", "Biosynthesis"), ("degradation", "Degradation"), ("fermentation", "Fermentation"), ("salvage", "Salvage"), ("glycolysis", "Energy"), ("tca", "Energy"), ("oxidat", "Energy"), ("respiration", "Energy"), ("photosynth", "Energy")]
     pcls = {i: next((c for kw, c in KW if kw in n.lower()), "Other") for i, n in pnames.items()}
     pshort = lambda fid, s: f"{fid}  {s}"
-    fig = plt.figure(figsize=(T.DOUBLE_IN, 7.6))
-    top, rh, lh, gap, gl = 0.985, 0.355, 0.1, 0.045, 0.012   # gl = gap between a map and its list   # radial height, list height, spacer between a list and the next row's title
-    panels = [("a  assembly pipeline, KEGG orthologs: C. difficile infection case", scA[scA.layer == "ko_eggnog"], pd.read_parquet(f"{bA}/features/ko_eggnog.parquet").set_index("feature_id"), cases, A_CASE, knames, kcls, ko_label, "ko_eggnog", "A"),
-              ("b  assembly pipeline, KEGG modules: same case", scA[scA.layer == "module"], pd.read_parquet(f"{bA}/features/module.parquet").set_index("feature_id"), cases, A_CASE, mnames, mcls, mshort, "module", "A"),
-              ("c  read pipeline, KEGG orthologs: colorectal cancer case", scB[scB.layer == "ko_humann"], pd.read_parquet(f"{bB}/features/ko_humann.parquet").set_index("feature_id"), casesB, repB, knames, kcls, ko_label, "ko_humann", "B"),
-              ("d  read pipeline, MetaCyc pathways: same case", scB[scB.layer == "pathway_humann"], pd.read_parquet(f"{bB}/features/pathway_humann.parquet").set_index("feature_id"), casesB, repB, pnames, pcls, pshort, "pathway_humann", "B")]
-    for k_, (title, sc, ref, cs, sample, names, classes, short, layer, pipe) in enumerate(panels):
-        row = k_ // 2; y_rad = top - rh - row * (rh + gl + lh + gap); ax = fig.add_axes([0.005 + 0.5 * (k_ % 2), y_rad, 0.49, rh])
+    refA = lambda layer: pd.read_parquet(f"{bA}/features/{layer}.parquet").set_index("feature_id")
+    refB = lambda layer: pd.read_parquet(f"{bB}/features/{layer}.parquet").set_index("feature_id")
+    # the two radial panels (dense KO layers) and, under each, the one-line summary of the sample's sparse layer
+    panels = [("a  assembly pipeline, KEGG orthologs: C. difficile infection case", scA[scA.layer == "ko_eggnog"], refA("ko_eggnog"), cases, A_CASE, knames, kcls, ko_label, "ko_eggnog", "A",
+               ("KEGG modules, same case", scA[scA.layer == "module"], refA("module"), mnames, mcls, mshort, "module")),
+              ("b  read pipeline, KEGG orthologs: colorectal cancer case", scB[scB.layer == "ko_humann"], refB("ko_humann"), casesB, repB, knames, kcls, ko_label, "ko_humann", "B",
+               ("MetaCyc pathways, same case", scB[scB.layer == "pathway_humann"], refB("pathway_humann"), pnames, pcls, pshort, "pathway_humann"))]
+    fig = plt.figure(figsize=(T.DOUBLE_IN, 4.25))   # 108 mm tall
+    top, rh, lh = 0.955, 0.64, 0.225   # radial axes top and height (equal aspect, 9.6 x 7.44 data units -> 2.72 in), list height; the sparse-layer summary sits between
+    for k_, (title, sc, ref, cs, sample, names, classes, short, layer, pipe, sparse) in enumerate(panels):
+        x0 = 0.005 + 0.5 * k_; y_rad = top - rh
+        ax = fig.add_axes([x0, y_rad, 0.49, rh])
         d = table(sc, ref, cs, sample, names, classes, short); listed, r = radial(ax, d, title, len(cs), cls_min=12 if len(d) > 400 else 6)
-        lx = fig.add_axes([0.01 + 0.5 * (k_ % 2), y_rad - gl - lh, 0.485, lh]); lx.axis("off")
+        rows.append({"pipeline": pipe, "study": A_STUDY if pipe == "A" else B_STUDY, "sample": sample, "layer": layer, **r})
+        s_title, s_sc, s_ref, s_names, s_cls, s_short, s_layer = sparse
+        m = summary(table(s_sc, s_ref, cs, sample, s_names, s_cls, s_short), len(cs))
+        rows.append({"pipeline": pipe, "study": A_STUDY if pipe == "A" else B_STUDY, "sample": sample, "layer": s_layer, **m})
+        fig.text(x0 + 0.015, y_rad - 0.006, f"{s_title}: {m['low'] + m['high']} of {m['assessed']} outside, {m['expected_but_missing']} expected but missing;\n"
+                 f"{'no deviation' if m['labelled'] == 0 else str(m['labelled']) + ' deviations'} shared with ≥ 25 % of the cohort's cases",
+                 ha="left", va="top", fontsize=T.PT_MIN, color=T.INK["secondary"], linespacing=1.25)
+        lx = fig.add_axes([x0 + 0.015, 0.012, 0.48, lh]); lx.axis("off")
         if listed:   # one column across the full panel width: id and full name, never truncated
             lx.text(0.0, 1.0, "\n".join(listed), ha="left", va="top", fontsize=T.PT_MIN, color=T.INK["primary"], transform=lx.transAxes, linespacing=1.3)
         else:
-            lx.text(0.08, 1.0, "no feature is outside the healthy range\nin both this sample and ≥ 25 % of the cohort's cases", ha="left", va="top", fontsize=T.PT_MIN, color=T.INK["muted"], transform=lx.transAxes)
-        rows.append({"pipeline": pipe, "study": A_STUDY if pipe == "A" else B_STUDY, "sample": sample, "layer": layer, **r})
+            lx.text(0.0, 1.0, "no KEGG ortholog is outside the healthy range\nin both this sample and ≥ 25 % of the cohort's cases", ha="left", va="top", fontsize=T.PT_MIN, color=T.INK["muted"], transform=lx.transAxes)
     T.save(fig, "fig13_gene_report", out_dir); plt.close(fig)
     new = pd.DataFrame(rows); rec = f"{P}/results/s14/example_reports.tsv"
-    if os.path.exists(rec) and pd.read_csv(rec, sep="\t").astype(str).equals(new.astype(str)):
-        return
+    if os.path.exists(rec):
+        old = pd.read_csv(rec, sep="\t")
+        key = ["pipeline", "sample", "layer"]
+        a = old.set_index(key)[DATA_COLS].sort_index(); b = new.set_index(key)[DATA_COLS].sort_index()
+        if a.equals(b):
+            return
     # results/ is frozen: a differing table is written beside the figure for review, never over the recorded file
     new.to_csv(os.path.join(out_dir, "example_reports_CHECK.tsv"), sep="\t", index=False); print("fig13: example counts differ from results/s14/example_reports.tsv; see example_reports_CHECK.tsv")
 

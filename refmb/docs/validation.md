@@ -62,7 +62,7 @@ by health label (healthy samples included in the pool are scored in-sample there
 and `reports/reads_disease_by_stratum.md` repeat the case/control comparison within age, sex, BMI and location strata where
 a study has at least 10 cases and 10 controls, and tabulate the balance of cases and controls first.
 
-`reports/example_reports.tsv` lists the individual sample reports used as worked examples.
+`reports/example_reports.tsv` lists the individual sample reports used as worked examples; `reports/example_case_counts.tsv` holds every count of the C. difficile worked example (all-layer counts, the 232 common families, and the share of the cohort low or high per family).
 
 ## 5. Packaging round trip
 

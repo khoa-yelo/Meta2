@@ -53,12 +53,12 @@ def make(out_dir):
     ps = pd.DataFrame(rep["per_study"]).rename(columns={"study_bioproject": "study", "n_samples": "n"})
     la = pd.read_csv(f"{P}/results/s6/loso_within_pool.tsv", sep="\t")
     hb = pd.read_csv(f"{P}/results/s11/pipelineB_heldout.tsv", sep="\t"); lb = pd.read_csv(f"{P}/results/s11/pipelineB_loso_all.tsv", sep="\t")
-    fig = plt.figure(figsize=(T.DOUBLE_IN, 4.0))
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.35, 1], wspace=0.12, hspace=0.55, left=0.1, right=0.975, top=0.93, bottom=0.11)
-    heldout(fig.add_subplot(gs[0, 0]), ps, LAYERS, "frac_outside_mean", "a  assembly pipeline: independent healthy cohorts")
-    loso_panel(fig.add_subplot(gs[0, 1]), la, LAYERS, "frac", "b  assembly: each baseline study left out")
-    heldout(fig.add_subplot(gs[1, 0]), hb, LAYERS_B, "mean", "c  read pipeline: independent healthy cohorts")
-    loso_panel(fig.add_subplot(gs[1, 1]), lb, LAYERS_B, "median", "d  read: each baseline study left out")
+    fig = plt.figure(figsize=(T.DOUBLE_IN, 4.3))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.35, 1], wspace=0.12, hspace=0.75, left=0.1, right=0.975, top=0.905, bottom=0.1)
+    heldout(fig.add_subplot(gs[0, 0]), ps, LAYERS, "frac_outside_mean", "a  assembly pipeline:\nindependent healthy cohorts")
+    loso_panel(fig.add_subplot(gs[0, 1]), la, LAYERS, "frac", "b  assembly pipeline:\neach baseline study left out")
+    heldout(fig.add_subplot(gs[1, 0]), hb, LAYERS_B, "mean", "c  read pipeline:\nindependent healthy cohorts")
+    loso_panel(fig.add_subplot(gs[1, 1]), lb, LAYERS_B, "median", "d  read pipeline:\neach baseline study left out")
     T.save(fig, "fig4_calibration", out_dir); plt.close(fig)
 
 

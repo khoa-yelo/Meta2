@@ -14,6 +14,21 @@
    0.5 pt tolerance, so no title, axis label or tick label is clipped at the page edge. Needs the pymupdf package.
 """
 import json, os, re, sys
+
+if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[1] == "--text-outside-page":   # helper mode for a second python env
+    import pymupdf as fitz
+    doc = fitz.open(sys.argv[2]); page = doc[0]; R = page.rect; tol = float(sys.argv[3]); out = []
+    for block in page.get_text("dict")["blocks"]:
+        for line in block.get("lines", []):
+            for span in line["spans"]:
+                x0, y0, x1, y1 = span["bbox"]; txt = span["text"].strip()
+                if not txt:
+                    continue
+                for side, over in (("left", R.x0 - x0), ("top", R.y0 - y0), ("right", x1 - R.x1), ("bottom", y1 - R.y1)):
+                    if over > tol:
+                        out.append((txt, side, round(float(over), 2)))
+    print(json.dumps(out)); sys.exit(0)
+
 import pypdf
 try:
     import pymupdf as fitz
@@ -40,6 +55,13 @@ def lum(hexc):
 def text_outside_page(pdf_path, tol=BBOX_TOL_PT):
     """Text spans whose bbox leaves the page box by more than tol points: [(text, side, overshoot_pt)]."""
     if fitz is None:
+        # the figure env has no pymupdf: run the same check in the PDF-build env when it exists (set REFMB_PDF_PYTHON to override)
+        import json as _json, os as _os, subprocess as _sp
+        alt = _os.environ.get("REFMB_PDF_PYTHON", "/home/classes/bios/270/khoa/envs/refmb_pdf/bin/python")
+        if _os.path.exists(alt):
+            r = _sp.run([alt, _os.path.abspath(__file__), "--text-outside-page", pdf_path, str(tol)], capture_output=True, text=True)
+            if r.returncode == 0:
+                return [tuple(x) for x in _json.loads(r.stdout)]
         return None
     doc = fitz.open(pdf_path); page = doc[0]; R = page.rect; out = []
     for block in page.get_text("dict")["blocks"]:
