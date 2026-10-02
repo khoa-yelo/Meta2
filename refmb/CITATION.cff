@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use refmb, please cite the paper below (details to be announced)."
 title: "refmb: a healthy-adult reference baseline for gut metagenome analysis"
-version: 0.8.0
+version: 0.8.1
 license: MIT
 repository-code: "https://github.com/khoa-yelo/Meta2"
 authors:

@@ -28,7 +28,7 @@ SPECIES = [
 
 def make_bundle(root: str, seed: int = 0) -> str:
     rng = np.random.default_rng(seed)
-    b = os.path.join(root, "gut-reads-test-v0.0-lenient")
+    b = os.path.join(root, "gut-reads-test-v0.2-lenient")
     for sub in ("features", "normalization/backbone"):
         os.makedirs(os.path.join(b, sub), exist_ok=True)
     # NCBI-like backbone: species, genus and family rows
@@ -84,7 +84,7 @@ def bundle(tmp_path_factory):
 
 
 def test_version():
-    assert refmb.__version__ == "0.8.0"
+    assert refmb.__version__ == "0.8.1"
 
 
 def test_parse_normalize_score(bundle, tmp_path):

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # refmb assembly-based pipeline — raw reads (or contigs) -> MGnify-pipeline-v5-equivalent annotations -> refmb query directory.
 # Pinned to the reference's measurement (docs.mgnify.org v5.0 + EBI-Metagenomics/pipeline-v5 job values, see container/pv5_ref):
-#   metaSPAdes 3.13 | contigs >= 500 bp | Prodigal 2.6.3 (-p meta) + FragGeneScan 1.31 (illumina_5), Prodigal priority
+#   metaSPAdes 3.15.3 (paired reads, with error correction; MEGAHIT 1.2.9 for single-end) | contigs >= 500 bp | Prodigal 2.6.3 (-p meta) + FragGeneScan 1.31 (illumina_5), Prodigal priority
 #   DIAMOND 0.9.25 blastp --max-target-seqs 1 vs UniRef90 2019_11, taxonomy via db_uniref90_result
 #   eggNOG-mapper 2.0.0 (-m diamond, --no_annot then --annotate_hits_table) with MGnify's eggnog.db / eggnog_proteins.dmnd
 #   InterProScan 5.36-75.0, Pfam application only | hmmsearch 3.2.1 --cut_ga vs KOfam (KEGG 90.0) | MGnify KEGG module completeness
@@ -90,6 +90,6 @@ if ! DONE emapper; then step "eggNOG-mapper"
   $EMPY "$HERE/emapper2/emapper.py" -i CDS.faa -m diamond --no_annot --no_file_comments --cpu "$THREADS" --data_dir "$DBS" --dmnd_db "$DBS/eggnog_proteins.dmnd" -o emapper --override >> "$LOG" 2>&1
   $EMPY "$HERE/emapper2/emapper.py" --annotate_hits_table emapper.emapper.seed_orthologs --no_file_comments --cpu "$THREADS" --data_dir "$DBS" -o emapper --override >> "$LOG" 2>&1; STAMP emapper; fi
 # 9. query directory -------------------------------------------------------------------------------------------------
-$PY "$HERE/pv5_to_query.py" build --sample "$SAMPLE" --contigs contigs.fasta --cds CDS.faa --diamond diamond.tsv --emapper emapper.emapper.annotations \
+REFMB_ASSEMBLER="$([ "$ASM" = metaspades ] && echo "metaSPAdes 3.15.3" || echo "MEGAHIT 1.2.9")" $PY "$HERE/pv5_to_query.py" build --sample "$SAMPLE" --contigs contigs.fasta --cds CDS.faa --diamond diamond.tsv --emapper emapper.emapper.annotations \
    $( [ -f ips.tsv ] && echo --ips ips.tsv ) --kofam-best kofam_best.tsv --kegg kegg.summary.kegg_pathways.tsv --out "$OUT/query" >> "$LOG" 2>&1
 step "done -> $OUT/query"

@@ -18,7 +18,7 @@ import pandas as pd
 from scipy.spatial import cKDTree
 from scipy.stats import binom
 
-LAYER_SPEC = {  # value column, detection column (mirrors configs/s5.yaml layers)
+LAYER_SPEC = {  # value column, detection column (the layers of the baseline-build configuration docs/configs/s5.yaml)
     "taxonomy_family": ("clr", "proportion_mapped"), "taxonomy_genus": ("clr", "proportion_mapped"), "taxonomy_species": ("clr", "proportion_mapped"),
     "ko_eggnog": ("copies_per_genome", "copies_per_genome"), "ko_kofam": ("copies_per_genome", "copies_per_genome"),
     "pfam": ("copies_per_genome", "copies_per_genome"), "module": ("completeness", "completeness"),
@@ -79,6 +79,7 @@ class Bundle:
                               "k": int(self.manifest.get("landscape", {}).get("k_neighbors", 10)) if isinstance(self.manifest.get("landscape"), dict) else 10}
 
     def features(self, layer: str) -> pd.DataFrame:
+        """The per-feature reference table of a layer (features/<layer>.parquet) indexed by feature_id, read once and cached."""
         if layer not in self._feat:
             self._feat[layer] = pd.read_parquet(os.path.join(self.path, "features", f"{layer}.parquet")).set_index("feature_id")
         return self._feat[layer]
@@ -197,6 +198,13 @@ def score(norm: dict, bundle: Bundle, calibration=None, body_site_of=None, ignor
             fam = calibration.apply(L["layer"], fam, "clr")
         if not fam.empty:
             meta = L["meta"]; load = L["loadings"]; pcs = L["pcs"]
+            # The pool matrix the loadings were fitted on holds a CLR only for detected features; undetected basis features were
+            # missing and the builder filled them with feature_fill_value before centring. A normalized query carries a
+            # multiplicative-replacement CLR for every basis feature, so undetected features are masked here and filled the same
+            # way; otherwise every sample is displaced along PC1 and lands near the 90th core-distance percentile.
+            dcol = LAYER_SPEC.get(L["layer"], ("clr", "proportion_mapped"))[1]
+            if dcol in fam.columns:
+                fam = fam.copy(); fam.loc[fam[dcol].astype(float) <= 0, "clr"] = np.nan
             X = fam.pivot(index="analysis_id", columns="feature_id", values="clr").reindex(columns=load.index).fillna(meta["feature_fill_value"])
             if meta.get("column_means"):
                 X = X - pd.Series(meta["column_means"], index=meta["column_features"]).reindex(load.index).to_numpy(); centring = "reference"

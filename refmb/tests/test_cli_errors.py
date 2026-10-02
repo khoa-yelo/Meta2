@@ -18,7 +18,7 @@ from test_refmb import make_bundle, write_profile
 def bundles(tmp_path_factory):
     root = str(tmp_path_factory.mktemp("bundles"))
     reads = make_bundle(root)
-    asm = os.path.join(root, "gut-assembly-test-v0.0-lenient"); os.makedirs(asm)
+    asm = os.path.join(root, "gut-assembly-test-v0.8-lenient"); os.makedirs(asm)
     json.dump({"bundle_id": os.path.basename(asm), "profile_type": "assembly", "n_samples": 10, "n_studies": 2, "percentile_grid": [1, 50, 99], "layers": {}},
               open(os.path.join(asm, "manifest.json"), "w"))
     return {"root": root, "reads": reads, "assembly": asm}
@@ -43,14 +43,14 @@ def assert_one_line_error(res, *fragments):
 
 def test_unknown_bundle_without_env(bundles, tmp_path):
     prof = tmp_path / "S.txt"; write_profile(str(prof))
-    res = run(["run-metaphlan", "--bundle", "gut-reads-test-v0.0-lenient", "--input", str(prof), "--out", str(tmp_path / "o")])
+    res = run(["run-metaphlan", "--bundle", "gut-reads-test-v0.2-lenient", "--input", str(prof), "--out", str(tmp_path / "o")])
     assert_one_line_error(res, "not found", "REFMB_BUNDLES")
 
 
 def test_bundle_typo(bundles, tmp_path):
     prof = tmp_path / "S.txt"; write_profile(str(prof))
-    res = run(["run-metaphlan", "--bundle", "gut-reads-test-v0.0-lenieint", "--input", str(prof), "--out", str(tmp_path / "o")], bundles["root"])
-    assert_one_line_error(res, "gut-reads-test-v0.0-lenieint", "not found")
+    res = run(["run-metaphlan", "--bundle", "gut-reads-test-v0.2-lenieint", "--input", str(prof), "--out", str(tmp_path / "o")], bundles["root"])
+    assert_one_line_error(res, "gut-reads-test-v0.2-lenieint", "not found")
 
 
 def test_missing_input_file(bundles, tmp_path):

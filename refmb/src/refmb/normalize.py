@@ -2,10 +2,10 @@
 
 Input is the query format (refmb/query_format.md): contigs (id, length, coverage), CDS (id, contig, KO list, Pfam list,
 optional KOfam KO), CDS taxonomy (cds_id, NCBI taxid), optional KEGG module completeness. Output is the same set of
-normalized tables the reference was built from (S2), computed with the rules shipped in the bundle
+normalized tables the reference pool was built from, computed with the rules shipped in the bundle
 (bundle/normalization/: rules.json, marker_panel.tsv, clr_basis_<rank>.txt) and the NCBI backbone.
 
-Semantics (identical to S2):
+Semantics (identical to the baseline build, docs/configs/s5.yaml and the bundle's rules.json):
   * taxonomy: per-CDS taxid -> lineage; per contig majority vote (>= 50% of resolvable CDS calls) at each rank; contig weight
     = length x coverage; explicit `unmapped` bucket over CDS-bearing contigs; proportions among mapped weight; CLR over the
     bundle's basis with multiplicative replacement (delta = 0.5 x smallest non-zero proportion in the sample).
@@ -45,6 +45,7 @@ class Backbone:
         self.name = dict(zip(tax["taxid"], tax["name"]))
 
     def resolve(self, tid: int):
+        """Current taxid for `tid` after following merged ids, or None when the backbone does not know it."""
         tid = self.merged.get(tid, tid)
         return tid if tid in self.valid else None
 
@@ -61,6 +62,7 @@ class BundleSpec:
         self.backbone_path = bb if os.path.isdir(bb) else self.rules.get("backbone_fallback")
 
     def band(self, total_length: float) -> str:
+        """Assembly-size class ('low', 'medium', 'high') of a total assembled length in bp from rules.json; 'unbanded' outside all classes."""
         for name, (lo, hi) in self.rules["quality_bands"].items():
             if total_length >= lo and (hi is None or total_length < hi):
                 return name
@@ -130,6 +132,7 @@ def normalize(sample_id: str, contigs: pd.DataFrame, cds: pd.DataFrame, cds_tax:
         tax_out[r] = (w, w_unm)
 
     def clr_table(rank: str) -> pd.DataFrame:
+        """Proportions among mapped weight over the bundle's basis at `rank`, and their CLR with multiplicative replacement of zeros."""
         w, _ = tax_out[rank]; basis = spec.basis[rank]
         tot = sum(w.values())
         prop = pd.Series({str(k): v / tot for k, v in w.items()}) if tot > 0 else pd.Series(dtype=float)
@@ -144,6 +147,7 @@ def normalize(sample_id: str, contigs: pd.DataFrame, cds: pd.DataFrame, cds_tax:
 
     # ---- gene layers --------------------------------------------------------------------------------------------------
     def gene_layer(tab: pd.DataFrame | None, col: str) -> pd.DataFrame:
+        """Per feature of annotation column `col`: number of CDS and sum of the carrying contigs' coverage."""
         if tab is None or col not in tab.columns:
             return pd.DataFrame(columns=["feature_id", "cds_count", "cov_sum"])
         cov_of_cds = tab["contig_id"].map(ccov).fillna(0.0).to_numpy()
@@ -192,6 +196,7 @@ def normalize(sample_id: str, contigs: pd.DataFrame, cds: pd.DataFrame, cds_tax:
 
 # ---- adapters -------------------------------------------------------------------------------------------------------------
 def contig_of(cds_id: str) -> str:
+    """Contig name of a CDS id of the form <contig>_<start>_<end>_<strand> or <contig>_<n>; the id itself when it has neither suffix."""
     m = re.match(r"^(.*?)(?:_\d+_\d+_[+-]|_\d+)$", cds_id)
     return m.group(1) if m else cds_id
 

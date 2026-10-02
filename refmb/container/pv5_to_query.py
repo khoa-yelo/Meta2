@@ -9,6 +9,7 @@ SPADES_RE = re.compile(r"NODE_(\d+)_length_(\d+)_cov_([\d.]+)")
 
 
 def read_fasta(path):
+    """Yield (header without '>', sequence) pairs from a FASTA file (plain or gzip)."""
     name = None; seq = []
     op = gzip.open if path.endswith(".gz") else open
     with op(path, "rt") as f:
@@ -24,6 +25,7 @@ def read_fasta(path):
 
 
 def filter_contigs(a):
+    """Copy the contigs of at least --min-length bp to --out (header trimmed to its first word, 80-column lines) and print the counts."""
     n = k = 0
     with open(a.out, "w") as o:
         for name, seq in read_fasta(a.inp):
@@ -105,11 +107,13 @@ def kofam_union(a):
 
 
 def contig_of(cds_id):
+    """Contig name of a CDS id (<contig>_<start>_<end>_<strand> from Prodigal/FragGeneScan, or <contig>_<n>)."""
     m = re.match(r"^(.*?)(?:_\d+_\d+_[+-]|_\d+)$", cds_id)
     return m.group(1) if m else cds_id
 
 
 def build(a):
+    """Assemble the query directory (contigs.tsv, cds.tsv, cds_taxonomy.tsv, modules.tsv, sample.json) from the pipeline's annotation files."""
     os.makedirs(a.out, exist_ok=True)
     contigs = []
     for name, seq in read_fasta(a.contigs):
@@ -147,13 +151,18 @@ def build(a):
         col = [c for c in k.columns if c.lower().startswith("module") or c.lower() == "pathway"][0]; comp = [c for c in k.columns if "complet" in c.lower()][0]
         pd.DataFrame({"module_id": k[col], "completeness": pd.to_numeric(k[comp], errors="coerce") / 100.0}).to_csv(f"{a.out}/modules.tsv", sep="\t", index=False)
     import json
-    json.dump({"sample_id": a.sample, "body_site": "Gut", "pipeline": {"name": "refmb-tierA", "version": "0.1", "measurement": "MGnify pipeline v5.0 equivalent",
-               "tools": {"assembler": "metaSPAdes 3.13", "cds": "Prodigal 2.6.3 + FragGeneScan 1.31", "taxonomy": "DIAMOND 0.9.25 / UniRef90 2019_11", "ko": "eggNOG-mapper 2.0.0 (MGnify v5 eggnog.db)",
+    try:
+        from refmb import __version__ as refmb_version
+    except ImportError:
+        refmb_version = "unknown"
+    json.dump({"sample_id": a.sample, "body_site": "Gut", "pipeline": {"name": "refmb-assembly", "version": refmb_version, "measurement": "MGnify pipeline v5.0 equivalent",
+               "tools": {"assembler": os.environ.get("REFMB_ASSEMBLER", "metaSPAdes 3.15.3"), "cds": "Prodigal 2.6.3 + FragGeneScan 1.31", "taxonomy": "DIAMOND 0.9.25 / UniRef90 2019_11", "ko": "eggNOG-mapper 2.0.0 (MGnify v5 eggnog.db)",
                          "pfam": "InterProScan 5.36-75.0 Pfam", "kofam": "HMMER 3.2.1 / KOfam KEGG 90.0", "modules": "MGnify give_pathways"}}}, open(f"{a.out}/sample.json", "w"), indent=1)
     print(f"query dir {a.out}: contigs {len(contigs)}, CDS {len(cds)}, with KO {cds.ko.ne('').sum()}, with Pfam {cds.pfam.ne('').sum()}, taxonomy hits {len(tax)}")
 
 
 def main():
+    """Command line: `pv5_to_query.py <subcommand> ...` with the subcommands used by run_tierA.sh (filter-contigs, rename-megahit, merge-cds, join-taxonomy, kofam-union, build)."""
     ap = argparse.ArgumentParser(); sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("filter-contigs"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True); p.add_argument("--min-length", type=int, default=500)
     p = sub.add_parser("rename-megahit"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True)

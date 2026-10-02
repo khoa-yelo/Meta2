@@ -64,9 +64,9 @@ name lookup. Per rank, proportions over the bundle's basis are CLR-transformed w
   `pathway_humann` layers when the bundle has them. These layers have not been validated from raw reads (see
   `docs/validation.md`).
 
-A profile whose species cannot be placed on the backbone to at least 90 % of its abundance (family level) is rejected as
-`LOW_MAPPED_FRACTION`; a profile without species rows (for example a header-only file) is `EMPTY_PROFILE`. Both appear in
-`rejections.tsv`; the command still exits 0. A file that is not a MetaPhlAn table at all (no `clade_name` column) is a
+A profile whose species cannot be placed on the backbone to at least 90 % of its abundance (family level) fails the floor
+`LOW_MAPPED_FRACTION`; a profile without species rows (for example a header-only file) fails `EMPTY_PROFILE`. Both appear in
+`rejections.tsv` with `reason_code` `NOT_NORMALIZED` and the floor name in the `detail` column; the command still exits 0. A file that is not a MetaPhlAn table at all (no `clade_name` column) is a
 user error: one line on stderr, exit 1.
 
 ## `refmb score`
@@ -77,7 +77,7 @@ Reads the normalized tables from `--normalized OUT` and writes to `--out REPORT`
 |---|---|
 | `scores.parquet` | one row per sample × layer × feature: `analysis_id`, `layer`, `feature_id`, `band`, `value`, `percentile`, `call`, `call_fdr`, `p_two_sided`, `fdr_q` |
 | `summaries.tsv` | one row per sample × layer: counts (`n_detected`, `n_assessed`, `n_low_raw`, `n_high_raw`, `n_low`, `n_high`, `n_missing`, `n_not_assessable`), `frac_outside_raw`, `excess_outside_p`, `excess_outside_ratio`, `excess_outside_q`, `weighted_deviation_score`, `quality_band`, landscape columns (`core_distance`, `core_distance_pct`, `neighbor_studies`, `PC1..PC3`), `bundle_id`, `calibration_applied` |
-| `rejections.tsv` | `analysis_id`, `reason_code`, `detail` for samples not scored |
+| `rejections.tsv` | `analysis_id`, `reason_code`, `detail` for samples not scored. `reason_code` is `NOT_NORMALIZED` (a normalization floor failed; `detail` names the floor: `EMPTY_PROFILE`, `LOW_MAPPED_FRACTION`, `BELOW_MIN_ASSEMBLY_QUALITY`, `NO_MARKER_PANEL_SIGNAL`) or `NO_MATCHING_REFERENCE` (body site or depth band without a reference) |
 | `report.md` | the readable summary: fraction outside the band per layer, samples with a significant excess, landscape position, the ten most extreme features per sample (taxa with their NCBI name next to the taxid), and the expected-but-missing features listed by name |
 
 Definitions:
@@ -109,8 +109,9 @@ a missing `--input` file, `--analysis-dir`, `--query` or `--calibration` directo
 `qc.tsv`, or an `--input` file that does not have MetaPhlAn's columns. Bad command-line syntax exits 2 (argparse).
 
 Scientific refusals are not errors: a sample that fails a normalization floor (`EMPTY_PROFILE`, `LOW_MAPPED_FRACTION`,
-assembly quality floors) or has no matching reference appears in `rejections.tsv` with its reason code and the command
-exits 0. Unparseable rows of `--reads-tsv` are reported on stderr and skipped, also with exit 0.
+assembly quality floors, named in the `detail` column) or has no matching reference appears in `rejections.tsv` with its
+`reason_code` (`NOT_NORMALIZED` or `NO_MATCHING_REFERENCE`) and the command exits 0. A bundle from a superseded series
+(read-based v0.1, assembly-based v0.7 and below) is still scored, with one warning line on stderr. Unparseable rows of `--reads-tsv` are reported on stderr and skipped, also with exit 0.
 
 The two-step workflow (`import-metaphlan` then `score`) and the one-step `run-metaphlan` write identical files: `qc.tsv`
 stores floats with 17 significant digits and is read back exactly.

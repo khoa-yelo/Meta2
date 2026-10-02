@@ -1,4 +1,4 @@
-"""refmb.build_reference — generic reference-bundle builder (same bundle format as S5, readable by refmb.score).
+"""refmb.build_reference — generic reference-bundle builder (the bundle format of docs/bundle_format.md, readable by refmb.score).
 
 Inputs
   samples : DataFrame sample_id, study, band            (the reference pool; equal per-study weights)
@@ -8,7 +8,7 @@ Inputs
             layer_samples {layer_name: iterable of sample_id} restricts a layer to the pool samples that were measured for it
             (prevalence denominators and study weights then come from that subset; the manifest records n_samples per layer)
 Writes bundle_dir/{features/*.parquet, landscape/*, provenance/*, manifest.json}. Statistics only: no sample ids are stored.
-Logic copied from scripts/s5_build_reference.py (layer_stats, landscape) so the two builders stay numerically identical.
+Logic identical to the baseline-build script of the project workspace (layer_stats, landscape), so the two builders stay numerically identical.
 """
 from __future__ import annotations
 
@@ -53,6 +53,10 @@ def weighted_quantiles(vals, w, probs):
 
 
 def layer_stats(name, t, samples, spec, rng, gene_layer=False):
+    """Per-feature reference statistics of one layer from a long table t (sample_id, feature_id, value, detect): detection
+    counts, study-weighted prevalence (overall and per band, with Wilson intervals), weighted percentiles on spec["percentiles"]
+    and a study bootstrap of the band edges. Returns (features table, V matrix samples x features with NaN for undetected,
+    feature ids, sample weights)."""
     ids = samples["sample_id"].to_numpy(); id_ix = {a: i for i, a in enumerate(ids)}
     t = t[t["sample_id"].isin(id_ix) & (t["detect"] > 0)]
     feats = np.array(sorted(t["feature_id"].astype(str).unique())); f_ix = {f: j for j, f in enumerate(feats)}
@@ -102,6 +106,10 @@ def layer_stats(name, t, samples, spec, rng, gene_layer=False):
 
 
 def landscape(V, feats, w, samples, spec, rng):
+    """PCA of the pool on one layer (V: samples x features, NaN = undetected) -> (loadings table, per-sample coordinates with
+    core and k-nearest-neighbour distances, metadata dict). Features below min_prevalence are dropped; undetected values are
+    filled with the pool minimum (feature_fill_value) before centring on the column means. refmb.score.score() projects a
+    query with the same fill, so undetected basis features must be masked there before the fill."""
     L = spec["landscape"]; prev = (~np.isnan(V)).mean(axis=0); keep = prev >= L["min_prevalence"]
     fill = float(np.nanmin(V[:, keep])) if keep.any() else 0.0
     X = np.nan_to_num(V[:, keep], nan=fill); col_means = X.mean(axis=0); X = X - col_means
@@ -115,8 +123,9 @@ def landscape(V, feats, w, samples, spec, rng):
     ref["core_distance"] = core; ref["knn_distance"] = knn; ref["quality_band"] = samples["band"].to_numpy()
     P = spec["percentiles"]
     return load, ref, {"variance_explained": var[:k].round(4).tolist(), "core_distance_percentiles": {str(p): float(np.percentile(core, p)) for p in P},
-                       "knn_distance_percentiles": {str(p): float(np.percentile(knn, p)) for p in P}, "centroid": centroid.round(6).tolist(),
-                       "feature_fill_value": fill, "column_means": col_means.round(6).tolist(), "column_features": feats[keep].tolist()}
+                       "knn_distance_percentiles": {str(p): float(np.percentile(knn, p)) for p in P}, "centroid": centroid.tolist(),
+                       "feature_fill_value": fill, "feature_fill_applies_to": "undetected features (detect <= 0), before subtracting column_means",
+                       "column_means": col_means.tolist(), "column_features": feats[keep].tolist()}
 
 
 def build(out: str, samples: pd.DataFrame, layers: dict, spec: dict, manifest_extra: dict, exclusions: pd.DataFrame | None = None, seed: int = 0) -> dict:

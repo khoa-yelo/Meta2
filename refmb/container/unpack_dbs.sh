@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# refmb tier A — verify checksums where provided and unpack the fetched databases in place. Usage: unpack_dbs.sh <dbdir>
+# refmb assembly-based pipeline — verify checksums where provided and unpack the fetched databases in place. Usage: unpack_dbs.sh <dbdir>
 set -euo pipefail
 cd "${1:?dbdir}"
 for f in *.md5; do base=${f%.md5}; [ -f "$base" ] || continue; exp=$(awk '{print $1}' "$f" | head -1); got=$(md5sum "$base" | cut -d' ' -f1); [ "$exp" = "$got" ] && echo "[md5 ok] $base" || { echo "[md5 FAIL] $base"; exit 1; }; done

@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 
@@ -29,7 +30,7 @@ import pandas as pd
 
 from refmb import __version__
 from refmb.normalize import Backbone, BundleSpec, normalize, normalize_mgnify_v5, read_query_dir
-from refmb.paths import ENV_VAR, bundle_dirs, list_bundles, resolve_bundle
+from refmb.paths import DEFAULT_ASSEMBLY_VERSION, DEFAULT_READS_VERSION, ENV_VAR, bundle_dirs, list_bundles, resolve_bundle
 from refmb.score import Bundle, score
 
 LAYERS = ["taxonomy_family", "taxonomy_genus", "taxonomy_species", "ko_eggnog", "ko_kofam", "pfam", "module", "ko_humann", "pathway_humann"]
@@ -41,6 +42,7 @@ NEEDS_PROFILE_TYPE = {"normalize": "assembly", "import-mgnify": "assembly", "run
 PROFILE_TYPE_WORD = {"assembly": "assembly-based", "reads": "read-based"}
 # how a normalized directory records which measurement it came from (sample_meta.json "pipeline")
 PIPELINE_PROFILE_TYPE = {"metaphlan": "reads", "mgnify_v5_assembly": "assembly"}
+CURRENT_SERIES = {"assembly": DEFAULT_ASSEMBLY_VERSION, "reads": DEFAULT_READS_VERSION}   # bundle series this release was validated with
 
 
 # --------------------------------------------------------------------------------------------- checks
@@ -57,12 +59,38 @@ def check_bundle_type(bundle: str, cmd: str, required: str | None = None) -> dic
     m = _manifest(bundle)
     need = required or NEEDS_PROFILE_TYPE.get(cmd)
     have = m.get("profile_type", "")
+    warn_superseded(m)
     if need and have != need:
         art = {"assembly": "an", "reads": "a"}
         raise ValueError(f"bundle '{m.get('bundle_id', os.path.basename(bundle))}' is {art.get(have, 'a')} {PROFILE_TYPE_WORD.get(have, have)} baseline "
                          f"(profile_type '{have}'), but '{cmd}' needs {art[need]} {PROFILE_TYPE_WORD[need]} one "
                          f"({'gut-reads-*' if need == 'reads' else 'gut-assembly-*'}); run 'refmb bundles' to see what is installed")
     return m
+
+
+def bundle_series(bundle_id: str) -> str | None:
+    """The series part of a bundle id (`gut-reads-adult-global-v0.2-lenient` -> '0.2'), or None when the id has no v<major.minor>."""
+    m = re.search(r"-v(\d+\.\d+)(?:-|$)", bundle_id or "")
+    return m.group(1) if m else None
+
+
+def warn_superseded(manifest: dict):
+    """Print one stderr line when the bundle belongs to an older series than the one this release was validated with.
+
+    Scoring goes ahead (exit status unchanged); the README lists the superseded series."""
+    have = bundle_series(manifest.get("bundle_id", "")); cur = CURRENT_SERIES.get(manifest.get("profile_type", ""))
+    if have and cur and tuple(int(x) for x in have.split(".")) < tuple(int(x) for x in cur.split(".")):
+        print(f"refmb: bundle series v{have} is superseded by v{cur} (bundle '{manifest.get('bundle_id')}'); results from it are not the validated ones", file=sys.stderr, flush=True)
+
+
+def load_calibration(a):
+    """Check and load `--calibration` (or return None) before any work is done, so a wrong path fails before --out is written."""
+    if not getattr(a, "calibration", None):
+        return None
+    check_exists([a.calibration], "--calibration", "dir")
+    check_exists([os.path.join(a.calibration, "calibration.json"), os.path.join(a.calibration, "features.parquet")], "--calibration")
+    from refmb.calibrate import Calibration
+    return Calibration.load(a.calibration)
 
 
 def check_exists(paths, what: str, kind: str = "file"):
@@ -137,7 +165,11 @@ def normalized_profile_type(out: str) -> str | None:
     p = os.path.join(out, "sample_meta.json")
     if not os.path.isfile(p):
         return None
-    kinds = {PIPELINE_PROFILE_TYPE.get(v.get("pipeline", ""), "assembly") for v in json.load(open(p)).values() if isinstance(v, dict)}
+    def pipeline_name(v: dict) -> str:
+        """Pipeline name of one sample_meta.json entry: import steps write a string, a query's sample.json an object {name, version, ...}."""
+        pl = v.get("pipeline", "")
+        return str(pl.get("name", "")) if isinstance(pl, dict) else str(pl)
+    kinds = {PIPELINE_PROFILE_TYPE.get(pipeline_name(v), "assembly") for v in json.load(open(p)).values() if isinstance(v, dict)}
     return kinds.pop() if len(kinds) == 1 else None
 
 
@@ -236,6 +268,7 @@ def write_report(r: dict, bundle: Bundle, out: str, calibration_id: str):
         names = taxon_names(bundle, sc.loc[is_tax & sc["call"].isin(["low", "high", "expected_but_missing"]), "feature_id"].unique())
 
         def with_name(g: pd.DataFrame) -> pd.DataFrame:
+            """Insert a `name` column (NCBI name for taxonomy layers, empty otherwise) after feature_id."""
             g = g.copy(); g.insert(g.columns.get_loc("feature_id") + 1, "name", [names.get(str(f), "") if l.startswith("taxonomy_") else "" for f, l in zip(g["feature_id"], g["layer"])])
             return g
 
@@ -245,6 +278,7 @@ def write_report(r: dict, bundle: Bundle, out: str, calibration_id: str):
         L += ["## Samples with a significant excess (q ≤ 0.05)\n", (sig[["analysis_id", "layer", "n_assessed", "n_low_raw", "n_high_raw", "excess_outside_ratio", "excess_outside_q"]].round(3).to_markdown(index=False) if len(sig) else "none"), ""]
         if "core_distance_pct" in S.columns:
             ld = S.drop_duplicates("analysis_id")[[c for c in ["analysis_id", "quality_band", "genome_equivalents_cov", "core_distance_pct", "neighbor_studies"] if c in S.columns]]
+            ld = ld.dropna(axis=1, how="all")   # e.g. genome_equivalents_cov is not defined for read-based profiles
             L += ["## Landscape (family CLR PCA of the reference)\n", "core_distance_pct = percentile of the sample's distance from the reference centroid among reference samples.\n", ld.round(2).to_markdown(index=False), ""]
         top = sc[sc["call"].isin(["low", "high"])].copy()
         if len(top):
@@ -265,19 +299,17 @@ def write_report(r: dict, bundle: Bundle, out: str, calibration_id: str):
     open(os.path.join(out, "report.md"), "w").write("\n".join(L))
 
 
-def cmd_score(a, norm=None):
-    """`refmb score`: compare normalized tables with the bundle and write the report files to --out."""
+def cmd_score(a, norm=None, cal=None):
+    """`refmb score`: compare normalized tables with the bundle and write the report files to --out.
+
+    norm / cal are passed by the run-* commands, which have already imported the samples and loaded the calibration."""
     if norm is None:
         check_exists([a.normalized], "--normalized", "dir")
         need = normalized_profile_type(a.normalized)
         check_bundle_type(a.bundle, "score", required=need)
+        cal = load_calibration(a)
         norm = load_normalized(a.normalized)
     bundle = Bundle(a.bundle)
-    cal = None
-    if getattr(a, "calibration", None):
-        check_exists([a.calibration], "--calibration", "dir")
-        from refmb.calibrate import Calibration
-        cal = Calibration.load(a.calibration)
     r = score(norm, bundle, calibration=cal)
     write_report(r, bundle, a.out, "none" if cal is None else cal.id)
     print(json.dumps({"scored": int(r["summaries"]["analysis_id"].nunique()) if not r["summaries"].empty else 0, "rejected": len(r["rejections"]), "rows": len(r["scores"]), "out": a.out}))
@@ -376,9 +408,9 @@ def _dispatch(a) -> int:
     elif a.cmd == "import-metaphlan":
         cmd_import_metaphlan(a)
     elif a.cmd == "run-metaphlan":
-        a.normalized = a.out; norm = cmd_import_metaphlan(a); cmd_score(a, norm)
+        cal = load_calibration(a); a.normalized = a.out; norm = cmd_import_metaphlan(a); cmd_score(a, norm, cal)
     elif a.cmd == "run-mgnify":
-        a.normalized = a.out; norm = cmd_import_mgnify(a); cmd_score(a, norm)
+        cal = load_calibration(a); a.normalized = a.out; norm = cmd_import_mgnify(a); cmd_score(a, norm, cal)
     return 0
 
 

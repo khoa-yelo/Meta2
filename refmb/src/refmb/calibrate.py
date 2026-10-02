@@ -1,9 +1,10 @@
-"""refmb.calibrate — map a different pipeline's measurement space into the reference's using samples measured both ways.
+"""refmb.calibrate — map a different pipeline's measurement space into the reference's using anchor samples.
 
-No calibration is shipped: the containers in container/ reproduce the reference measurement and need none. This module is
-library-only (there is no `refmb calibrate` command); `refmb score --calibration DIR` applies a saved Calibration.
+Anchor samples are samples measured by both pipelines: the user's and the reference's. No calibration is shipped: the
+containers in container/ reproduce the reference measurement and need none. This module is library-only (there is no
+`refmb calibrate` command); `refmb score --calibration DIR` applies a saved Calibration.
 
-Model (configs/s11.yaml): per layer, transformed values (log10 copies per genome; CLR as is; completeness as is) are related by a
+Model (the calibration configuration, docs/configs/s11.yaml): per layer, transformed values (log10 copies per genome; CLR as is; completeness as is) are related by a
 per-feature affine map y_ref = a_f + b_f x_user, with a_f, b_f and the residual sd shrunk toward a layer-global fit. Anchor-level
 K-fold cross-validation gives out-of-sample residuals; those drive the feature gate (residual sd vs reference band half-width) and
 the layer gate (fraction outside, resolution Spearman, surviving fraction). A detection model gives per-feature sensitivity
@@ -61,6 +62,7 @@ def _fit_params(pairs: pd.DataFrame, cfg: dict) -> tuple[dict, pd.DataFrame]:
     else:
         al_g, be_g = _ols(X, Y)                     # y = alpha + beta x
     def to_pred(al, be):
+        """Intercept and slope of the prediction direction y = a + b x from the fitted (alpha, beta) of either regression direction."""
         return (-al / be, 1.0 / be) if classical else (al, be)
     a_g, b_g = to_pred(al_g, be_g)
     res_g = Y - (a_g + b_g * X); s_g = float(np.std(res_g, ddof=1)) if len(res_g) > 2 else np.nan
@@ -115,9 +117,11 @@ class Calibration:
 
     @property
     def scorable_layers(self):
+        """Names of the layers whose gate status is 'scorable' (the only layers a calibrated pipeline is scored on)."""
         return [l for l, r in self.layers.items() if r["status"] == "scorable"]
 
     def ebm_eligible(self, layer: str) -> set:
+        """Feature ids of a layer that may be called expected_but_missing: calibrated, with detection sensitivity at or above the configured minimum."""
         F = self._F.get(layer)
         if F is None:
             return set()
@@ -144,12 +148,14 @@ class Calibration:
         return t
 
     def save(self, out: str):
+        """Write the calibration to a directory: calibration.json (id, config, layer gates, provenance) and features.parquet."""
         os.makedirs(out, exist_ok=True)
         json.dump({"id": self.id, "config": self.cfg, "layers": self.layers, "meta": self.meta}, open(os.path.join(out, "calibration.json"), "w"), indent=1, default=float)
         self.features.to_parquet(os.path.join(out, "features.parquet"), index=False)
 
     @classmethod
     def load(cls, path: str):
+        """Read a calibration directory written by save()."""
         j = json.load(open(os.path.join(path, "calibration.json")))
         return cls(j["id"], j["config"], j["layers"], pd.read_parquet(os.path.join(path, "features.parquet")), j["meta"])
 
@@ -236,6 +242,8 @@ def fit(user: dict, ref: dict, anchors: list, band_of: dict, bundle, cfg: dict, 
 
 
 def load_config(path: str | None = None) -> dict:
-    """Load a calibration configuration (YAML). With path=None it looks for configs/s11.yaml beside the source tree, which
-    exists only in the development layout; installed users pass a path."""
-    return yaml.safe_load(open(path or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs", "s11.yaml")))
+    """Load a calibration configuration (YAML) from `path`. The configuration the method was developed with is shipped in the
+    repository as docs/configs/s11.yaml; the installed package carries no default, so a missing path is a ValueError."""
+    if not path:
+        raise ValueError("load_config needs the path of a calibration configuration, for example docs/configs/s11.yaml from the repository")
+    return yaml.safe_load(open(path))

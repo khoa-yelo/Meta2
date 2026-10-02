@@ -62,6 +62,7 @@ class ReadsBundleSpec:
         return self._ko_map
 
     def band(self, reads):
+        """Depth band ('low', 'medium', 'high') of a read count from the bundle's depth_bands_reads; 'unknown' when the count is missing."""
         if reads is None or (isinstance(reads, float) and np.isnan(reads)):
             return "unknown"
         for k, (lo, hi) in self.rules["depth_bands_reads"].items():
@@ -70,6 +71,8 @@ class ReadsBundleSpec:
         return "unbanded"
 
     def resolve(self, species_name: str, taxid=None) -> dict:
+        """Place one MetaPhlAn species on the bundle's taxonomy: {species, genus, family} taxids (-1 where it cannot be placed),
+        by the bundle's own species map first and the NCBI backbone (with merged ids) second."""
         out = {"species": -1, "genus": -1, "family": -1}
         if species_name in self.name_map:      # the bundle's own map first: a query species is placed exactly where the reference placed it
             return dict(self.name_map[species_name])
@@ -181,7 +184,8 @@ def normalize_profile(sample_id: str, table: pd.DataFrame, reads, spec: ReadsBun
         prop = agg / agg.sum() if agg.sum() > 0 else agg
         basis = spec.basis[rank]; b = prop.reindex(basis).fillna(0.0)
         z = int((b == 0).sum()); delta = spec.rules["clr_delta_fraction_of_min"] * (b[b > 0].min() if (b > 0).any() else 1.0)
-        rep = np.where(b > 0, b * (1 - z * delta), delta); clr = np.log(rep) - np.log(rep).mean()
+        with np.errstate(invalid="ignore", divide="ignore"):   # a profile with nothing placed gives NaN CLRs and is rejected below, without a warning
+            rep = np.where(b > 0, b * (1 - z * delta), delta); clr = np.log(rep) - np.log(rep).mean()
         out[f"taxonomy_{rank}"] = pd.DataFrame({"feature_id": basis, "proportion_mapped": b.to_numpy(), "clr": clr, "rank": rank})
     rej = []
     if tot <= 0 or len(table) == 0:

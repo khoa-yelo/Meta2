@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# refmb tier A — fetch the pinned MGnify pipeline v5.0 reference databases and tool data. Run once; resumable; 4 parallel streams.
+# refmb assembly-based pipeline — fetch the pinned MGnify pipeline v5.0 reference databases and tool data. Run once; resumable; 4 parallel streams.
 # Usage: fetch_dbs.sh <dest_dir>
 set -uo pipefail
 DEST=${1:?dest dir}; mkdir -p "$DEST"; cd "$DEST"

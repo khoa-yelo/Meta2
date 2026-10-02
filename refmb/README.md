@@ -25,7 +25,7 @@ outside the central 95 % band exceeds the 5 % a healthy sample is expected to sh
 
 ```bash
 pip install git+https://github.com/khoa-yelo/Meta2.git@refmb#subdirectory=refmb
-refmb --version          # refmb 0.8.0
+refmb --version          # refmb 0.8.1
 ```
 
 Requirements: Python 3.10 or later; numpy, pandas, scipy, pyarrow, pyyaml and tabulate are installed automatically.
@@ -126,7 +126,7 @@ given to an assembly command or the other way round, a missing input file, or a 
 | `report.md` | human-readable summary: fraction outside the band per layer, samples with a significant excess, landscape position, the ten most extreme features per sample (taxa with their name next to the NCBI taxid), expected-but-missing features by name |
 | `scores.parquet` | one row per sample × layer × feature: `value`, `percentile`, `call` (`within`/`low`/`high`/`expected_but_missing`/`not_assessable`), `call_fdr`, `p_two_sided`, `fdr_q`, `band` |
 | `summaries.tsv` | one row per sample × layer: `n_assessed`, `n_low_raw`, `n_high_raw`, `n_missing`, `frac_outside_raw`, `excess_outside_p`, `excess_outside_q` (Benjamini–Hochberg across samples within a layer), landscape coordinates, quality band, bundle id |
-| `rejections.tsv` | samples not scored, with a reason code (`NOT_NORMALIZED`, `NO_MATCHING_REFERENCE`) |
+| `rejections.tsv` | samples not scored: `reason_code` is `NOT_NORMALIZED` (a normalization floor failed) or `NO_MATCHING_REFERENCE` (body site or depth band without a reference); the `detail` column names the floor, for example `EMPTY_PROFILE`, `LOW_MAPPED_FRACTION` or `BELOW_MIN_ASSEMBLY_QUALITY` |
 | `qc.tsv`, `normalized/` | the normalized tables that were scored (written by the import step) |
 
 How to read it: a healthy adult sample measured like the reference has about 5 % of its features outside the 2.5–97.5

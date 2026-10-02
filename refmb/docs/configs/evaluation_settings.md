@@ -3,9 +3,15 @@
 Transcribed from the header and constants of the evaluation script in the project workspace (`s8_evaluate.py`), which
 produced `docs/reports/assembly_case_control_evaluation.md` and the per-study tables.
 
-- **Folds.** The case/control studies listed by the split rules (`splits_rules.yaml`: at least 20 cases and 10 controls,
-  symptom-only labels excluded). Every study's samples are scored against a baseline rebuilt **without** that study, so
-  no sample ever meets a reference containing its own study.
+- **Folds.** Every study's samples are scored against a baseline rebuilt **without** that study, so no sample ever meets a
+  reference containing its own study. The inclusion rule differs between the two pipelines and is stated here as applied:
+  - assembly-based pipeline: studies with at least 20 cases and at least 10 controls (`splits_rules.yaml`, symptom-only
+    labels excluded); 11 studies, of which PRJEB62821 (hemodialysis) has 24 cases and 16 controls;
+  - read-based pipeline: studies with at least 20 cases and at least 20 controls; 14 studies.
+  One of the 14 read-pipeline studies, `HMP_2019_ibdmdb` (inflammatory bowel disease; `HMP_2019` in the report tables), is a largely adolescent cohort:
+  the median age of both its cases and its controls is 16.5 years (`docs/reports/reads_disease_by_stratum.md`), although
+  the baseline covers adults (18-65). It is kept in the read-pipeline evaluation and in the disease atlas; its AUROC is
+  reported per study so that a reader can judge the comparison without it.
 - **Task.** Case (diseased) versus control (healthy, control, or curatedMetagenomicData control), adults in the stratum
   only. Train on all other folds (cases and controls), test on the held-out study. Reported: AUROC per study, the mean
   over studies, and per condition where at least two studies carry it. The within-study 5-fold cross-validated AUROC is

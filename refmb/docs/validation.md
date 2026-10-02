@@ -40,7 +40,9 @@ significant excess and the landscape distance. Region effects are confounded wit
 
 `reports/assembly_case_control_evaluation.md` with per-study tables in `reports/assembly_case_control_per_study_lenient.md`
 and `..._strict.md`: leave-one-study-out AUROC of a classifier on reference-relative features versus raw CLR abundances,
-alpha diversity and a published health index, on 11 held-out case/control studies. Reference-relative features win
+alpha diversity and a published health index, on 11 held-out case/control studies (at least 20 cases and 10 controls each;
+the read-based evaluation below uses 14 studies with at least 20 cases and 20 controls, one of them a largely adolescent
+cohort, see `configs/evaluation_settings.md`). Reference-relative features win
 modestly: macro-mean AUROC 0.618 vs 0.581 for raw abundances (one-sided Wilcoxon p = 0.021); on the strict baseline the
 difference is not significant (p = 0.051). Gene layers alone are at least as good as all layers (0.631). For the read-based
 baseline the taxonomy comparison is 0.690 vs 0.664 (p = 0.052), and 0.769 vs 0.715 (p = 0.004) when restricted to
@@ -70,7 +72,7 @@ the installed package and with the pre-packaging code gives identical `scores.pa
 Measured once with `/usr/bin/time -v` on the README example (`refmb run-metaphlan` on `examples/synthetic_healthy_adult.txt`,
 102 species, against `gut-reads-adult-global-v0.2-lenient`, writing scores, summaries and report): wall time 16.2 s,
 105 % of one CPU, 2.8 GB peak resident memory (most of it the NCBI backbone of the bundle), on an AMD EPYC 7742 host
-with Python 3.12.14, pandas 2.x, from a warm file cache. Scoring an assembly-based test set of two MGnify analyses
+with Python 3.12.14, pandas 3.0.6, numpy 2.5.3 and pyarrow 25.0.0, from a warm file cache. Scoring an assembly-based test set of two MGnify analyses
 (18,675 score rows) took about 2 s in the same setting; normalizing a query directory took about 19 s. These are single
 measurements, not benchmarks.
 
