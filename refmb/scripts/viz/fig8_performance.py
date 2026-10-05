@@ -46,7 +46,7 @@ def make(out_dir):
     for yi, v in zip(yy, mac):
         ax.text(v, yi - 0.3, f"{v:.2f}", ha="center", va="bottom", fontsize=T.PT_MIN, color=T.INK["primary"])
     ax.axvline(0.5, color=T.INK["axis"], lw=0.6, zorder=1)
-    ax.set_yticks(yy); ax.set_yticklabels(["percentiles", "raw CLR", "alpha diversity", "GMHI (genus approx.)"]); ax.invert_yaxis(); ax.tick_params(axis="y", length=0)
+    ax.set_yticks(yy); ax.set_yticklabels(["percentiles", "raw abundances", "alpha diversity", "GMHI (genus approx.)"]); ax.invert_yaxis(); ax.tick_params(axis="y", length=0)
     ax.set_xlim(0.4, 0.8); ax.set_xticks([0.4, 0.5, 0.6, 0.7, 0.8]); ax.set_ylim(len(SETS) - 0.5, -0.8); ax.set_xlabel("mean AUROC, 11 studies"); ax.set_title("b  assembly pipeline:\nmean over studies", loc="left")
     # c, d — read pipeline: cross-study leave-one-study-out, reference-relative vs raw CLR (family + genus + species)
     cc = pd.read_csv(f"{P}/results/s11/pipelineB_case_control.tsv", sep="\t").set_index("study")

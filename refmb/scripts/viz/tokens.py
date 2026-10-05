@@ -36,7 +36,7 @@ DEV_ORDER = ["low_deep", "low_light", "neutral", "high_light", "high_deep"]
 # validator (tokens_validation.txt): all checks pass within the set; the purple also clears the normal-vision floor against the
 # deviation blue (ΔE 16.5), which it never shares a figure with.
 CAT = ["#8a3ab9", "#008300", "#e87ba4", "#eda100"]
-CAT_LABELS = {"reference_relative": "reference-relative", "raw_clr": "raw CLR", "alpha_diversity": "alpha diversity", "health_index": "GMHI (genus approx.)"}
+CAT_LABELS = {"reference_relative": "percentiles", "raw_clr": "raw abundances (CLR)", "alpha_diversity": "alpha diversity", "health_index": "GMHI (genus approx.)"}
 # sequential (density, hexbin): one blue hue light -> dark
 SEQ = ["#86b6ef", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]   # starts at ramp step 250 so the lightest bin clears 2:1 on white
 # ink & chrome (print)

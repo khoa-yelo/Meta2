@@ -36,8 +36,16 @@ def _numbers():
 def _rows(d):
     """Nine rows of the case's family report, chosen by rule so the strip shows every kind of call: the two low families
     with the highest and the two with the lowest percentiles, the within families nearest the 10th, 50th, 90th and 96th
-    percentiles, and the first expected-but-missing family (alphabetical). All nine are among the 232 leaf families."""
+    percentiles, and the first expected-but-missing family (alphabetical), among families carried by at least 90 % of healthy adults in some size class, most prevalent first."""
     d = d.drop_duplicates("name").sort_values("name")
+    # rows come from families that at least 90 % of healthy adults carry in some size class, so the strip shows familiar gut families
+    ref = EC.reference(); pc = [c for c in ref.columns if c.startswith("prevalence_band_")]
+    prev = ref[pc].max(axis=1); common = set(prev.index[prev >= 0.9]); d = d[d.index.isin(common)].copy(); d["prev"] = prev.reindex(d.index).to_numpy()
+    lows = d[d["call"] == "low"].sort_values("prev", ascending=False).head(4)
+    within = d[d["call"] == "within"].sort_values("prev", ascending=False).head(12)
+    pick = [within.iloc[(within["percentile"] - q).abs().argsort().iloc[0]] for q in (10, 50, 75, 96)]
+    miss = d[d["call"] == "expected_but_missing"].sort_values("prev", ascending=False).head(1)
+    return pd.concat([lows, pd.DataFrame(pick), miss]).drop_duplicates("name").sort_values("percentile", na_position="first")
     lows = d[d["call"] == "low"].sort_values(["percentile", "name"], ascending=[False, True]); low = pd.concat([lows.head(2), lows.tail(2)])
     within = d[d["call"] == "within"]; pick = [within.iloc[(within["percentile"] - q).abs().argsort().iloc[0]] for q in (10, 50, 90, 96)]
     miss = d[d["call"] == "expected_but_missing"].head(1)
@@ -83,7 +91,7 @@ def make(out_dir):
             continue
         p = r["percentile"]; col = T.DEV["neutral"] if r["call"] == "within" else (T.DEV["low_deep"] if p < 1 else T.DEV["low_light"]) if r["call"] == "low" else (T.DEV["high_deep"] if p > 99 else T.DEV["high_light"])
         cx.scatter([p], [yi], s=18, color=col, edgecolor=T.INK["surface"], linewidth=0.3, zorder=3)
-        cx.text(103, yi, f"{r['call']}  ({p:.1f})" if p < 2.5 or p > 97.5 else f"within  ({p:.0f})", va="center", ha="left", fontsize=T.PT_MIN, color=T.INK["secondary"])
+        cx.text(103, yi, f"{r['call']}  ({p:.2f})" if p < 2.5 or p > 97.5 else f"within  ({p:.0f})", va="center", ha="left", fontsize=T.PT_MIN, color=T.INK["secondary"])
     cx.set_yticks(y); cx.set_yticklabels(smp["name"], style="italic"); cx.tick_params(axis="y", length=0); cx.set_ylim(len(smp) - 0.5, -0.5)
     cx.set_xlim(-1, 101); cx.set_xticks([0, 25, 50, 75, 100]); cx.tick_params(axis="x", length=2, width=0.4)
     cx.set_xlabel("percentile among healthy adults (shaded = healthy range, 2.5th–97.5th)")
