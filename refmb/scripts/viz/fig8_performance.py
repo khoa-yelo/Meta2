@@ -29,7 +29,7 @@ def make(out_dir):
         d = per[per["feature_set"] == fs].set_index("study").reindex(order)
         yy = np.arange(len(order)) + off[k]
         ax.hlines(yy, d["ci_low"], d["ci_high"], color=COL[fs], lw=0.9, zorder=2)
-        ax.scatter(d["auroc_loso"], yy, s=9, color=COL[fs], edgecolor=T.INK["surface"], linewidth=0.3, zorder=3, label=T.CAT_LABELS[fs].replace("reference-relative", "percentiles (reference-relative)"))
+        ax.scatter(d["auroc_loso"], yy, s=9, color=COL[fs], edgecolor=T.INK["surface"], linewidth=0.3, zorder=3, label=T.CAT_LABELS[fs])
     ax.axvline(0.5, color=T.INK["axis"], lw=0.6, zorder=1)
     ax.set_yticks(np.arange(len(order))); ax.set_yticklabels(per.drop_duplicates("study").set_index("study").reindex(order)["label"]); ax.invert_yaxis()
     ax.set_xlim(0.15, 1.0); ax.set_xlabel("AUROC in the held-out study (95 % bootstrap CI)")
@@ -57,20 +57,28 @@ def make(out_dir):
     ax = fig.add_subplot(gs[1, 0]); yy = np.arange(len(b))
     ax.hlines(yy, b.min(axis=1), b.max(axis=1), color=T.INK["axis"], lw=0.9, zorder=2)
     for fs in ["raw_clr", "reference_relative"]:
-        ax.scatter(b[fs], yy, s=11, color=COL[fs], edgecolor=T.INK["surface"], linewidth=0.3, zorder=3, label=T.CAT_LABELS[fs].replace("reference-relative", "percentiles (reference-relative)"))
+        ax.scatter(b[fs], yy, s=11, color=COL[fs], edgecolor=T.INK["surface"], linewidth=0.3, zorder=3, label=T.CAT_LABELS[fs])
     ax.axvline(0.5, color=T.INK["axis"], lw=0.6, zorder=1)
     ax.set_yticks(yy); ax.set_yticklabels([f"{s}  {c} ({int(k)})" for s, c, k in zip(b.index, cond, n)]); ax.invert_yaxis()
     ax.set_xlim(0.15, 1.0); ax.set_xlabel("AUROC in the held-out study"); ax.set_title("c  read pipeline (taxonomy):\neach study held out", loc="left")
     ax.legend(loc="upper center", bbox_to_anchor=(0.45, -0.17), ncol=2, frameon=False, handletextpad=0.3, columnspacing=1.0, borderaxespad=0)
-    ax = fig.add_subplot(gs[1, 1]); crc = cond.eq("CRC").to_numpy()
-    groups = [(f"all ({len(b)})", np.ones(len(b), bool)), (f"colorectal cancer ({crc.sum()})", crc), (f"other conditions ({(~crc).sum()})", ~crc)]
-    for gi, (lab, m) in enumerate(groups):
-        for k, fs in enumerate(["reference_relative", "raw_clr"]):
-            v = b.loc[m, fs].mean(); y = gi + (-0.17 if k == 0 else 0.17)
-            ax.hlines(y, 0.5, v, color=T.INK["axis"], lw=0.8, zorder=2); ax.scatter(v, y, s=22, color=COL[fs], edgecolor=T.INK["surface"], linewidth=0.3, zorder=3)
-            ax.text(v + 0.012, y, f"{v:.2f}", ha="left", va="center", fontsize=T.PT_MIN, color=T.INK["primary"])
-    ax.axvline(0.5, color=T.INK["axis"], lw=0.6, zorder=1); ax.set_yticks(range(len(groups))); ax.set_yticklabels([g for g, _ in groups]); ax.invert_yaxis(); ax.tick_params(axis="y", length=0)
-    ax.set_xlim(0.4, 0.9); ax.set_xticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9]); ax.set_ylim(len(groups) - 0.5, -0.5); ax.set_xlabel("mean AUROC over held-out studies"); ax.set_title("d  read pipeline:\nmean by condition", loc="left")
+    # d — read pipeline: published health indices used as they are (results/s15/health_indices_B.tsv) against percentiles;
+    # GMWI2 was trained on samples of 7 of the 14 studies, so its fair comparison is the 7 studies it never saw
+    H = pd.read_csv(f"{P}/results/s15/health_indices_B.tsv", sep="\t"); Hs = H.pivot(index="study", columns="index", values="auroc_direct")
+    base = H.drop_duplicates("study").set_index("study"); unseen = ~base["in_gmwi2_training"].astype(bool)
+    ax = fig.add_subplot(gs[1, 1])
+    rows = [("percentiles", base["percentiles"], COL["reference_relative"], "o"), ("raw abundances", base["raw_abundances"], COL["raw_clr"], "o"),
+            ("Shannon diversity", Hs["Shannon"], T.CAT[2], "o"), ("GMHI (50 species)", Hs["GMHI"], T.CAT[3], "o"), ("GMWI2", Hs["GMWI2"], T.INK["primary"], "D")]
+    yl = []; y = 0
+    for gi, (glab, m) in enumerate([(f"all {len(base)} studies", pd.Series(True, index=base.index)), (f"{int(unseen.sum())} studies not used to train GMWI2", unseen)]):
+        ax.text(0.405, y - 0.75, glab, fontsize=T.PT_MIN, color=T.INK["primary"], weight="bold", va="center")
+        for lab, ser, col, mk in rows:
+            v = ser[m.reindex(ser.index).fillna(False).astype(bool)].mean()
+            ax.hlines(y, 0.5, v, color=T.INK["axis"], lw=0.8, zorder=2); ax.scatter(v, y, s=20, color=col, marker=mk, edgecolor=T.INK["surface"], linewidth=0.3, zorder=3)
+            ax.text(v + 0.012, y, f"{v:.2f}", ha="left", va="center", fontsize=T.PT_MIN, color=T.INK["primary"]); yl.append((y, lab)); y += 1
+        y += 1.2
+    ax.axvline(0.5, color=T.INK["axis"], lw=0.6, zorder=1); ax.set_yticks([a for a, _ in yl]); ax.set_yticklabels([b for _, b in yl]); ax.tick_params(axis="y", length=0)
+    ax.set_xlim(0.4, 0.9); ax.set_xticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9]); ax.set_ylim(y - 1.5, -1.4); ax.set_xlabel("mean AUROC over studies"); ax.set_title("d  read pipeline: published\nhealth indices, scores as is", loc="left")
     T.save(fig, "fig8_performance", out_dir); plt.close(fig)
 
 
