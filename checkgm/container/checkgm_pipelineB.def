@@ -1,0 +1,42 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.8
+
+%labels
+    Maintainer checkgm project
+    Description checkgm read-based pipeline — measurement as in curatedMetagenomicData 3: MetaPhlAn 3.0.14 with the mpa_v30_CHOCOPhlAn_201901 marker database (fetched separately with fetch_dbs_B.sh), Bowtie2, and the checkgm package for normalization and scoring against a gut-reads-adult-global bundle.
+
+%files
+    run_pipelineB.sh /opt/checkgm/run_pipelineB.sh
+    fetch_dbs_B.sh /opt/checkgm/fetch_dbs_B.sh
+    ../pyproject.toml /opt/checkgm/pkg/pyproject.toml
+    ../README.md /opt/checkgm/pkg/README.md
+    ../LICENSE /opt/checkgm/pkg/LICENSE
+    ../CHANGELOG.md /opt/checkgm/pkg/CHANGELOG.md
+    ../src /opt/checkgm/pkg/src
+
+%post
+    # MetaPhlAn 3.0.14 in its own environment (its dependency pins predate the pandas/numpy versions checkgm needs)
+    micromamba create -y -n mpa3 -c conda-forge -c bioconda metaphlan=3.0.14 bowtie2 && micromamba clean -a -y
+    # checkgm in a current Python
+    micromamba install -y -n base -c conda-forge python=3.12 pip && micromamba clean -a -y
+    /opt/conda/bin/pip install --no-cache-dir /opt/checkgm/pkg
+    chmod +x /opt/checkgm/run_pipelineB.sh /opt/checkgm/fetch_dbs_B.sh
+
+%environment
+    export PATH=/opt/conda/envs/mpa3/bin:/opt/conda/bin:/opt/checkgm:$PATH
+    export REFMB_BIN=/opt/conda/bin/checkgm
+    export REFMB_BUNDLES=${REFMB_BUNDLES:-/bundles}
+
+%runscript
+    exec bash /opt/checkgm/run_pipelineB.sh "$@"
+
+%help
+    checkgm read-based pipeline container. Build from the container/ directory of the checkgm tool tree:
+        cd container && apptainer build checkgm_pipelineB.sif checkgm_pipelineB.def
+    Fetch the marker database once (0.4 GB download, about 3 GB with the Bowtie2 index):
+        apptainer exec checkgm_pipelineB.sif fetch_dbs_B.sh /data/mpa3_db 8
+    Run one sample (both mates as unpaired reads, no read QC, as curatedMetagenomicData 3 did):
+        apptainer run --bind /data/mpa3_db:/dbs,/data/checkgm_bundles:/bundles,$PWD:/work checkgm_pipelineB.sif \
+            --sample S1 --r1 /work/S1_1.fq.gz --r2 /work/S1_2.fq.gz --dbs /dbs \
+            --bundle gut-reads-adult-global-v0.2-lenient --out /work/S1 --threads 8
+    Output: /work/S1/S1.txt (MetaPhlAn profile), S1.reads.tsv, and score/ with scores.parquet, summaries.tsv, report.md.
