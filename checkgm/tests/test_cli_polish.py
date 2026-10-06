@@ -30,7 +30,7 @@ def test_missing_calibration_fails_before_anything_is_written(bundle, tmp_path):
     r = run("run-metaphlan", "--bundle", bundle, "--input", str(prof), "--calibration", str(tmp_path / "nonexistent"), "--out", str(out))
     assert r.returncode == 1 and r.stdout == "" and r.stderr.startswith("checkgm: --calibration directory not found")
     assert not out.exists()
-    r = run("score", "--bundle", bundle, "--normalized", str(tmp_path), "--calibration", str(tmp_path / "nonexistent"), "--out", str(out))
+    r = run("score-normalized", "--bundle", bundle, "--normalized", str(tmp_path), "--calibration", str(tmp_path / "nonexistent"), "--out", str(out))
     assert r.returncode == 1 and not out.exists()
 
 

@@ -1,4 +1,4 @@
-# checkGM — a healthy reference baseline for gut metagenomes
+# checkGM — a reference baseline for gut metagenomes
 
 checkgm reports a new human gut metagenome as percentiles against a reference of healthy adults that were measured in
 exactly the same way. The idea is the one genomics takes for granted: a variant is only interpretable against a
@@ -42,18 +42,53 @@ Two spellings of one name are used deliberately: checkGM for the project and the
 console script and the container tag.
 
 Requirements: Python 3.10 or later; numpy, pandas, scipy, pyarrow, pyyaml and tabulate are installed automatically.
-To work from a clone: `cd checkgm && pip install -e ".[test]" && pytest` (31 tests, about 50 s). The quotes matter in
-zsh, which would otherwise read `.[test]` as a glob.
+To work from a clone: `cd checkgm && pip install -e ".[test]" && pytest` (155 tests, about 100 s). The quotes matter
+in zsh, which would otherwise read `.[test]` as a glob. `pip install "checkgm[figures]"` adds matplotlib, which
+`checkgm assess` uses to draw the per-sample report figure; without it the tables are written and the figure is
+skipped with a note.
 
-The package only normalizes and scores. Producing the measurement from raw reads needs the pipeline containers below.
+The package itself assesses and scores. Producing the measurement from raw reads needs the pipeline containers below.
+
+## Commands
+
+Five commands cover the whole workflow, and `checkgm <command> --help` documents every argument:
+
+| command | what it does |
+|---|---|
+| `setup` | downloads the reference baselines (`setup bundles`), or a pipeline's reference databases (`setup db`) |
+| `profile` | runs a measurement pipeline on raw reads: assembly, or MetaPhlAn 3 |
+| `assess` | places a sample against its baseline — percentiles, calls, report and figure |
+| `score` | the supervised health score, computed from an `assess` output |
+| `end-to-end` | `profile`, then `assess`, then `score`, under one output directory |
+
+`assess` works out what kind of input it was given from what the path holds — an assembly query directory, an MGnify v5
+analysis directory, a MetaPhlAn profile, or a directory `assess` itself wrote — so one command covers every entry
+point. Re-running it on its own output re-scores without repeating the normalization, which is how a sample is compared
+against a second baseline or calibration.
+
+Both commands that can start a very large or very long job (`setup db`, `profile`) check their prerequisites first and
+take `--dry-run`, so the size of a 90 GB download or the exact pipeline invocation can be seen before committing to it.
+
+The stages these are built from stay available under their own names (`normalize`, `import-mgnify`, `import-metaphlan`,
+`score-normalized`, `run-normalize`, `run-mgnify`, `run-metaphlan`) and are unchanged; the paper's methods refer to
+them. One rename matters: `score` now means the health score, and what `score` used to do is `assess`, or
+`score-normalized` for the stage on its own. Passing the old flags to `score` prints that redirect.
 
 ## Get a reference bundle
 
 Bundles, the assembly-based pipeline image and the baseline pool accession lists are too large for GitHub and are
 distributed beside it; a Zenodo deposit covering them and the container image `checkgm_tierA.sif` is prepared, and its
-DOI will be recorded here [TBD]. **Until that deposit is public there is no download URL**, so the files have to be
-requested from the authors. The table below is what such a request should yield, so that whatever arrives can be
-checked against it:
+DOI will be recorded here [TBD]. **That deposit is not public yet**, so until it is, the archives have to be requested
+from the authors and given to `setup` directly:
+
+```bash
+checkgm setup bundles --dest ~/checkgm-bundles --url /path/holding/the/archives
+export CHECKGM_BUNDLES=~/checkgm-bundles
+```
+
+`setup bundles` verifies every archive against the checksum recorded below, skips what is already present and correct,
+and prints the sizes first with `--dry-run`. Once the deposit is public the same command works without `--url`. The
+table is also what a request to the authors should yield, so that whatever arrives can be checked by hand:
 
 | file | bytes | sha256 |
 |---|---:|---|
@@ -96,7 +131,7 @@ at its median abundance), so a healthy sample's profile can be shown without red
 count in their header, as this one does, so the option is redundant here).
 
 ```bash
-checkgm run-metaphlan --bundle gut-reads-adult-global-v0.2-lenient \
+checkgm assess --bundle gut-reads-adult-global-v0.2-lenient \
     --input examples/synthetic_healthy_adult.txt --reads-tsv examples/reads.tsv --out example_report
 cat example_report/report.md
 ```
@@ -116,7 +151,7 @@ layers as well.
 Already have a MGnify v5 assembly analysis (the MGYA download folder)? Score it against the assembly-based bundle:
 
 ```bash
-checkgm run-mgnify --bundle gut-assembly-adult-global-v0.8-lenient --analysis-dir MGYA00XXXXXX --out mgya_report
+checkgm assess --bundle gut-assembly-adult-global-v0.8-lenient --input MGYA00XXXXXX --out mgya_report
 ```
 
 Mistakes are reported as one line (`checkgm: ...`) with exit status 1: a bundle that cannot be found, a read-based bundle
@@ -131,17 +166,15 @@ given to an assembly command or the other way round, a missing input file, or a 
   unpaired reads and there is no read QC step, which is how the reference profiles were produced.
 - **Assembly-based pipeline:** `container/checkgm_tierA.def` (image `checkgm_tierA.sif`, see the table above; build with
   `cd container && apptainer build checkgm_tierA.sif checkgm_tierA.def`) pins the MGnify v5 tool versions.
-  `container/fetch_dbs.sh` and `unpack_dbs.sh` fetch the reference databases (about 70 GB compressed, 110 GB unpacked;
+  `container/fetch_dbs.sh` and `unpack_dbs.sh` fetch the reference databases (about 90 GB to download and 170 GB on disk once unpacked (`checkgm setup db --pipeline assembly --dry-run` prints the current figures);
   downloaded once). `container/run_tierA.sh` goes from reads to a *query directory* (`docs/query_format.md`), which
-  `checkgm run-normalize` turns into a report (or `checkgm normalize` then `checkgm score`, if you want the
-  normalized tables separately). Assembly needs roughly 16 CPUs and 128 GB of memory per sample.
+  `checkgm assess --input` turns into a report. `checkgm profile --pipeline assembly` runs this for you and checks the
+  image and databases are present first; `checkgm end-to-end` continues straight into the assessment and the score.
+  Assembly needs roughly 16 CPUs and 128 GB of memory per sample.
 - **Scoring-only image:** `container/Dockerfile` installs just the package, and is built from this directory with
   `podman build -t checkgm:0.8.2 -f container/Dockerfile .` (the tag has to be lowercase, which both podman and docker
-  insist on). One caveat applies to the built image rather than to the build: the recipe still carries the entrypoint
-  under the tool's former name, so until that line names the installed `checkgm` console script a run exits with
-  `refmb: executable file not found`. Its header comment and its `REFMB_BUNDLES` default are left over from the same
-  rename, the latter harmlessly, `paths.py` still reading that name as a legacy alias of `CHECKGM_BUNDLES`. The
-  read-based image is unaffected, since `checkgm_pipelineB.def` calls the command by its full path.
+  insist on). Its entrypoint is the installed `checkgm` console script, so `podman run checkgm:0.8.2 --help` prints
+  the command list.
 
 ## Reading a report
 
@@ -230,7 +263,7 @@ donor cohort are held out together (`docs/validation.md` section 2).
 - The early example profile `checkgm/examples/CosteaPI_2017_alien2-11-0-0.txt` (a public curatedMetagenomicData 3 profile,
   commits `97cba6b`, `92c85ce`) stays in the history of branch `checkgm` by the owner's decision of 2026-10-02 (`CHANGELOG.md`);
   the example shipped since 0.8.0 is synthetic.
-- Tests: `pip install -e ".[test]" && pytest` (31 tests, about 50 s). CI runs them on Python 3.10 and 3.12
+- Tests: `pip install -e ".[test]" && pytest` (155 tests, about 100 s). CI runs them on Python 3.10 and 3.12
   (`.github/workflows/test.yml` at the repository root).
 - `scripts/viz2/` and `scripts/viz/` are dated snapshots of the project workspace's figure scripts and are not edited
   here, the workspace copy being the authority, so neither should be expected to diff clean against it. The v2 pair

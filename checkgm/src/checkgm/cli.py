@@ -21,6 +21,7 @@ sample appears in rejections.tsv and the command exits 0.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -377,9 +378,9 @@ def write_report(r: dict, bundle: Bundle, out: str, calibration_id: str):
     measured = next((v for k, v in measured.items() if bid.startswith(k)), f"{sp.get('name', '')} {sp.get('version', '')}".strip())
     kind = {"assembly": "gut assembly analyses", "reads": "gut read-based profiles"}.get(ptype, "gut samples") + (f" ({measured})" if measured else "")
     remeasure = {"assembly": "re-assemblies of the same reads", "reads": "re-profiling of the same reads"}.get(ptype, "re-measurements of the same reads")
-    L = [f"# checkgm report — {m['bundle_id']}\n", f"Reference: {m['n_samples']:,} healthy adult {kind}, {m['n_studies']} studies. Calibration: {calibration_id}. "
+    L = [f"# checkgm report — {m['bundle_id']}\n", f"Reference: {m['n_samples']:,} reference adult {kind}, {m['n_studies']} studies. Calibration: {calibration_id}. "
          f"Scored {S['analysis_id'].nunique() if not S.empty else 0} sample(s); {len(r['rejections'])} not scored (rejections.tsv).\n",
-         "Read this first: a healthy adult gut sample measured like the reference has about 5% of features outside the 2.5–97.5 percentile band. "
+         "Read this first: a gut sample from the reference population, measured the same way, has about 5% of features outside the 2.5–97.5 percentile band. "
          "The sample-level excess test asks whether a sample has more than that (q ≤ 0.05 after BH across samples within a layer). "
          f"Individual feature calls (low/high) are descriptive; binary calls are less reproducible across {remeasure} than percentiles.\n"]
     if not S.empty:
@@ -505,13 +506,316 @@ def _add(p, *names, out: str | None = None):
             p.add_argument(flag, help=H[n])
 
 
+# ------------------------------------------------------------------------- the five commands of the public interface
+#
+# setup / profile / assess / score / end-to-end. The eight stage commands below them (normalize, import-mgnify,
+# import-metaphlan, score-normalized, run-*) stay registered and behave exactly as before: they are the stages these
+# five are built from, the paper's methods name them, and a script that pins one stage should not be forced through a
+# wrapper. They are grouped apart in --help rather than hidden, since a reader of a published command line has to be
+# able to find them.
+
+# Below this many of the health score's features present, the score is near its intercept and carries little sample
+# information. Set from the cohort the model was fitted on: the 1st percentile of features present per sample, over the
+# 9,123 read-pipeline out-of-sample scorings (median 34 of 104, p1 = 12), so it marks the genuinely sparse tail.
+THIN_FEATURES = 12
+
+ASSEMBLY_QUERY_FILES = ("contigs.tsv", "cds.tsv", "cds_taxonomy.tsv")   # read_query_dir's own requirement
+MGNIFY_SUFFIXES = ("_annotations.gff.bgz", "_diamond.tsv.gz", "_kofam_hmm.tsv.gz")
+
+
+def _input_kind(path: str, profile_type: str) -> str:
+    """Which normalizer an --input belongs to: 'query', 'mgnify', 'metaphlan' or 'normalized'.
+
+    Decided by what the path holds rather than by its name, and narrowed by the bundle's profile type so a reads
+    bundle cannot be handed an assembly directory by accident. The kinds are distinguishable without ambiguity: a
+    directory this tool wrote carries normalized/*.parquet, an assembly query carries the three tables read_query_dir
+    requires, and an MGnify v5 analysis carries the pipeline's suffixed result files.
+    """
+    if os.path.isdir(path):
+        if glob.glob(os.path.join(path, "normalized", "*.parquet")):
+            return "normalized"
+        names = set(os.listdir(path))
+        if all(f in names for f in ASSEMBLY_QUERY_FILES):
+            return "query"
+        if any(n.endswith(s) for s in MGNIFY_SUFFIXES for n in names):
+            return "mgnify"
+        if profile_type == "reads":
+            raise ValueError(f"{path} is a directory, but a read-based baseline is scored from MetaPhlAn profiles: pass "
+                             f"the profile files themselves, or a directory 'checkgm assess' already wrote")
+        raise ValueError(f"{path} is not an assembly query directory (needs {', '.join(ASSEMBLY_QUERY_FILES)}; see "
+                         f"docs/query_format.md), an MGnify v5 analysis directory, or a directory 'checkgm assess' wrote")
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"input not found: {path}")
+    return "metaphlan"
+
+
+def _one_kind(inputs, profile_type: str) -> str:
+    """The kind all the inputs share. Mixing kinds in one run is refused rather than silently split, because the two
+    assembly normalizers apply different calibrations and a single --out would mix them without saying so."""
+    kinds = {}
+    for p in inputs:
+        kinds.setdefault(_input_kind(p, profile_type), []).append(p)
+    if len(kinds) > 1:
+        shown = "; ".join(f"{k}: {', '.join(v[:2])}{' ...' if len(v) > 2 else ''}" for k, v in sorted(kinds.items()))
+        raise ValueError(f"the inputs are not all of one kind ({shown}); run each kind separately")
+    return next(iter(kinds))
+
+
+CMD_OF_KIND = {"query": "normalize", "mgnify": "import-mgnify", "metaphlan": "import-metaphlan"}
+
+
+def cmd_assess(a) -> int:
+    """Place samples against their baseline: normalize the input, score it, and draw the per-sample report."""
+    kind = _one_kind(a.input, _manifest(a.bundle).get("profile_type", ""))
+    if kind != "normalized":
+        check_bundle_type(a.bundle, CMD_OF_KIND[kind])
+    cal = load_calibration(a)
+    a.normalized = a.out
+    norm = None
+    if kind == "normalized":
+        a.normalized = a.input[0]
+    elif kind == "query":
+        a.query = a.input
+        norm = cmd_normalize(a)
+    elif kind == "mgnify":
+        a.analysis_dir = a.input
+        norm = cmd_import_mgnify(a)
+    else:
+        norm = cmd_import_metaphlan(a)
+    cmd_score(a, norm, cal)
+    if a.figures:
+        _figures_or_say_why(a.out, os.path.join(a.out, "figures"))
+    return 0
+
+
+def _figures_or_say_why(assessed: str, out_dir: str) -> None:
+    """Draw the per-sample figures, or say in one line why not. A failure here never fails the assessment: the
+    percentiles are the product and the figure is one rendering of them, so an absent matplotlib or an undrawable
+    sample must not cost a user their scoring run."""
+    from checkgm import report_figures
+    if not report_figures.available():
+        print("figures: skipped (matplotlib is not installed; 'pip install checkgm[figures]' draws them)")
+        return
+    paths = report_figures.write_figures(assessed, out_dir)
+    print(f"figures: {len(paths)} written to {out_dir}" if paths
+          else "figures: nothing drawable (no sample had a scorable layer)")
+
+
+def cmd_health_score(a) -> int:
+    """The supervised health score, read from an assess output directory."""
+    from checkgm import healthscore
+    model = healthscore.load_model(a.model)
+    if a.explain:
+        print(healthscore.explain(a.assessed, a.explain, model, top=a.top).to_string(index=False))
+        return 0
+    t = healthscore.score_assessment(a.assessed, model)
+    # An absent feature is filled with the value the fit used for one, so absence is the normal reading rather than
+    # missing data: over the 9,123 scored cohort samples the median carries just 34 of the 104 features, and 97% carry
+    # fewer than half, so a "most features absent" warning would fire on almost every legitimate sample. The threshold
+    # is therefore taken from that distribution — the 1st percentile is 12 features — and flags only a sample sparse
+    # even by this model's standards, where the score is close to the intercept whatever the sample holds.
+    if {"n_features_present", "n_features_absent"} <= set(t.columns) and len(t):
+        thin = t[t["n_features_present"] < THIN_FEATURES]
+        if len(thin):
+            ids = ", ".join(str(x) for x in thin["analysis_id"].head(3)) + (" ..." if len(thin) > 3 else "")
+            print(f"note: {len(thin)} of {len(t)} sample(s) carry fewer than {THIN_FEATURES} of the model's "
+                  f"{len(model['features'])} features ({ids}), which 99% of the reference cohort exceeds; their score "
+                  f"sits near the intercept and says little about the sample. Check that the assessment used a "
+                  f"gut-reads baseline and that the profile is not unusually sparse.", file=sys.stderr)
+    os.makedirs(a.out, exist_ok=True)
+    p = os.path.join(a.out, "health_score.tsv")
+    t.to_csv(p, sep="\t", index=False)
+    print(t.to_string(index=False))
+    print(f"\nwrote {p}")
+    return 0
+
+
+def _profile(a) -> dict:
+    """Run a measurement pipeline on raw reads and return what it produced."""
+    from checkgm import profile_run
+    why = profile_run.preflight(a.pipeline, a.dbs, a.image)
+    if why:
+        raise ValueError(f"cannot run the {a.pipeline} pipeline: {'; '.join(why)}")
+    r = profile_run.run(a.pipeline, a.sample, a.out, r1=a.r1, r2=a.r2, contigs=a.contigs, dbs=a.dbs,
+                        threads=a.threads, mem_gb=a.mem_gb, image=a.image, dry_run=a.dry_run)
+    for k in ("pipeline", "sample", "out", "status", "assess_input", "log", "elapsed_s"):
+        if r.get(k) is not None:
+            print(f"{k}: {r[k]}")
+    for n in r.get("notes") or []:
+        print(f"note: {n}")
+    if a.dry_run and r.get("command"):
+        print("would run: " + " ".join(str(c) for c in r["command"]))
+    return r
+
+
+def cmd_profile(a) -> int:
+    _profile(a)
+    return 0
+
+
+def cmd_setup(a) -> int:
+    """Download the baselines, or a pipeline's reference databases.
+
+    A dry run has to print the plan: its whole purpose is to let someone see the size before committing to a transfer
+    that, for the assembly databases, is 90 GB over the wire and 170 GB on disk.
+    """
+    from checkgm import setup_data
+    if a.target == "bundles":
+        r = setup_data.bundles(a.dest, url=a.url, doi=a.doi, only=a.only, dry_run=a.dry_run)
+        rows = r.get("bundles") or []
+        if not rows:
+            raise ValueError(f"no bundle matched --only {a.only}; run 'checkgm setup bundles --dry-run' with no --only to see the choices")
+        for b_ in rows:
+            size = setup_data.human_bytes(b_.get("bytes") or 0)
+            # a dry run verifies nothing by construction, so flagging it as unverified would read as a fault
+            flag = "" if (a.dry_run or b_.get("verified", True)) else "  NOT VERIFIED"
+            print(f"{b_['name']}  {size}  {b_.get('action', '?')}{flag}")
+        total = setup_data.human_bytes(r.get("total_bytes") or 0)
+        print(f"{'would download' if a.dry_run else 'downloaded'} {len(rows)} bundle(s), {total}"
+              + (f"; source {r['source']}" if r.get("source") else ""))
+        if not a.dry_run:
+            print(f"export {ENV_VAR}={a.dest}")
+    else:
+        for row in setup_data.plan(a.pipeline):
+            if row.get("kind") != "databases":
+                continue   # plan() also lists the baselines; 'setup db' is only about the databases
+            print(f"{row['what']}\n  {row['n_files']} file(s), {setup_data.human_bytes(row['download_bytes'])} to download, "
+                  f"{setup_data.human_bytes(row['disk_bytes'])} on disk\n  source: {row['source']}\n  note: {row['note']}")
+        r = setup_data.databases(a.pipeline, a.dest, dry_run=a.dry_run)
+        for st in r.get("steps") or []:
+            print(("would run: " if a.dry_run else "ran: ") + " ".join(str(x) for x in st.get("argv") or []))
+        if not a.dry_run:
+            print(f"databases {'ready' if r.get('ok') else 'INCOMPLETE'} in {a.dest}")
+    return 0
+
+
+def cmd_end_to_end(a) -> int:
+    """profile, then assess, then score, under one output directory."""
+    root = a.out
+    pa = argparse.Namespace(pipeline=a.pipeline, sample=a.sample, out=os.path.join(root, "profile"), r1=a.r1, r2=a.r2,
+                            contigs=a.contigs, dbs=a.dbs, threads=a.threads, mem_gb=a.mem_gb, image=a.image,
+                            dry_run=a.dry_run)
+    r = _profile(pa)
+    if a.dry_run:
+        print("end-to-end: stopping after the profile stage, since --dry-run leaves nothing for assess to read")
+        return 0
+    ai = r.get("assess_input")
+    if not ai:
+        raise ValueError(f"the {a.pipeline} pipeline reported no output to assess (status '{r.get('status')}'); "
+                         f"its log is {r.get('log')}")
+    a.input = [ai]
+    a.reads_tsv = (r.get("outputs") or {}).get("reads_tsv") if a.pipeline == "read" else None
+    a.out = os.path.join(root, "assessed")
+    cmd_assess(a)
+    if a.score:
+        sa = argparse.Namespace(assessed=a.out, out=root, model=None, explain=None, top=15)
+        cmd_health_score(sa)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The checkgm argument parser (subcommands with one-sentence help for every argument)."""
-    ap = argparse.ArgumentParser(prog="checkgm", description="Score gut metagenomes against a healthy-adult reference baseline measured the same way. "
+    ap = argparse.ArgumentParser(prog="checkgm", description="Score gut metagenomes against a reference baseline of adults measured the same way. "
                                  "Each baseline (bundle) belongs to one measurement: assembly-based (MGnify v5) or read-based (MetaPhlAn 3 / HUMAnN 3).",
                                  epilog="User errors print one line 'checkgm: ...' on stderr and exit 1; samples that fail a normalization floor are listed in rejections.tsv and exit 0.")
     ap.add_argument("--version", action="version", version=f"checkgm {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="COMMAND")
+
+    # the five commands a user works with
+    p = sub.add_parser("setup", help="download the baselines, or a pipeline's reference databases",
+                       description="Fetch what checkGM needs to run. 'setup bundles' downloads the baselines (about 55-65 MB each) "
+                                   "and verifies them against their recorded checksums; 'setup db' fetches the reference databases a "
+                                   "pipeline needs to measure raw reads, which are large, and is only needed for 'checkgm profile'. "
+                                   "Both are resumable and skip what is already present and verified.")
+    st = p.add_subparsers(dest="target", required=True, metavar="TARGET")
+    q = st.add_parser("bundles", help="download and verify the reference baselines",
+                      description=f"Download the baselines into --dest and verify them, then export ${ENV_VAR} to point at it.")
+    q.add_argument("--dest", required=True, help="directory to download the bundles into (it is created if absent)")
+    q.add_argument("--url", help="base URL or local directory holding the bundle archives, instead of resolving the published record")
+    q.add_argument("--doi", help="Zenodo DOI to resolve instead of the release's own")
+    q.add_argument("--only", action="append", help="download just this bundle id, or 'assembly'/'read' for that pipeline's pair (repeatable)")
+    q.add_argument("--dry-run", action="store_true", help="print what would be downloaded and how large it is, and change nothing")
+    q = st.add_parser("db", help="fetch a pipeline's reference databases (large)",
+                      description="Fetch the reference databases a measurement pipeline needs, by running the pinned scripts in container/. "
+                                  "The read pipeline needs about 0.4 GB downloaded and 3 GB on disk; the assembly pipeline about 90 GB "
+                                  "downloaded and 170 GB on disk. Neither is needed to assess a profile someone else measured.")
+    q.add_argument("--pipeline", required=True, choices=("assembly", "read"), help="which pipeline's databases to fetch")
+    q.add_argument("--dest", required=True, help="directory to download the databases into")
+    q.add_argument("--dry-run", action="store_true", help="print the sizes and the commands that would run, and change nothing")
+
+    p = sub.add_parser("profile", help="run a measurement pipeline on raw reads",
+                       description="Run one sample through a measurement pipeline: 'assembly' assembles the reads and annotates them the way "
+                                   "MGnify v5 does, writing OUT/query; 'read' runs MetaPhlAn 3, writing OUT/<sample>.txt. Needs the pipeline's "
+                                   "container image and databases ('checkgm setup db'), which 'profile' checks for before it starts anything. "
+                                   "Assess the result with 'checkgm assess --input'.")
+    p.add_argument("--pipeline", required=True, choices=("assembly", "read"), help="which pipeline to run")
+    p.add_argument("--sample", required=True, help="sample id, used to name the outputs")
+    p.add_argument("--out", required=True, help="directory to write the pipeline's output to")
+    p.add_argument("--r1", help="FASTQ of read 1 (gzip is fine)")
+    p.add_argument("--r2", help="FASTQ of read 2, for paired reads")
+    p.add_argument("--contigs", help="assembly pipeline only: start from these contigs instead of assembling reads")
+    p.add_argument("--dbs", help=f"directory holding the pipeline's databases (default: $CHECKGM_DBS)")
+    p.add_argument("--image", help="Apptainer image to run in (default: $CHECKGM_IMAGE, or the image beside container/)")
+    p.add_argument("--threads", type=int, default=8, help="threads to give the pipeline (default 8; assembly wants 16)")
+    p.add_argument("--mem-gb", type=int, dest="mem_gb", help="memory in GB to give the pipeline (assembly wants 128)")
+    p.add_argument("--dry-run", action="store_true", help="print the command that would run, and change nothing")
+
+    p = sub.add_parser("assess", help="place samples against a reference baseline and write the report",
+                       description="Normalize the input the way the baseline was built, score every taxon, gene and pathway as a percentile of "
+                                   "the reference distribution, and draw one report figure per sample. The kind of input is read from what the "
+                                   "path holds: an assembly query directory, an MGnify v5 analysis directory, a MetaPhlAn profile, or a directory "
+                                   "'assess' itself wrote (which is scored again without re-normalizing). Writes scores.parquet, summaries.tsv, "
+                                   "rejections.tsv, report.md and figures/.")
+    p.add_argument("--bundle", required=True, help=H["bundle"])
+    p.add_argument("--input", nargs="+", required=True, help="one or more samples to assess: query directories, MGnify analysis directories, MetaPhlAn profiles, or a directory 'assess' wrote")
+    p.add_argument("--out", required=True, help=OUT_H["both"])
+    p.add_argument("--reads-tsv", dest="reads_tsv", default=None, help=H["reads_tsv"])
+    p.add_argument("--humann-genefamilies", dest="humann_genefamilies", nargs="+", default=None, help=H["humann_genefamilies"])
+    p.add_argument("--humann-pathabundance", dest="humann_pathabundance", nargs="+", default=None, help=H["humann_pathabundance"])
+    p.add_argument("--calibration", default=None, help=H["calibration"])
+    fg = p.add_mutually_exclusive_group()
+    fg.add_argument("--figures", dest="figures", action="store_true", default=True, help="draw the per-sample report figures (the default)")
+    fg.add_argument("--no-figures", dest="figures", action="store_false", help="skip the figures and write only the tables")
+
+    p = sub.add_parser("score", help="the supervised health score, from an assess output",
+                       description="Apply the shipped health score to a directory 'checkgm assess' wrote. The score is an L1-penalised logistic "
+                                   "regression over reference percentiles, fitted on 14 case/control studies and reported here as a decision "
+                                   "function: higher is more case-like. It is defined for read-based assessments only, and it is a research "
+                                   "instrument, not a diagnostic.")
+    p.add_argument("--assessed", help="directory 'checkgm assess' wrote (holding scores.parquet)")
+    p.add_argument("--out", help="directory to write health_score.tsv to")
+    p.add_argument("--model", default=None, help="a health-score model JSON to use instead of the shipped one")
+    p.add_argument("--explain", metavar="SAMPLE", help="print the per-feature contributions for one sample instead of scoring every sample")
+    p.add_argument("--top", type=int, default=15, help="with --explain, how many features to show (default 15)")
+    # The old 'score' compared normalized tables with a bundle; that is 'assess' now, and is still available in full as
+    # 'score-normalized'. Accepting its flags here turns an argparse "unrecognized arguments" into a one-line redirect.
+    p.add_argument("--bundle", help=argparse.SUPPRESS)
+    p.add_argument("--normalized", help=argparse.SUPPRESS)
+
+    p = sub.add_parser("end-to-end", help="profile, assess and score in one run",
+                       description="Run the measurement pipeline, assess the result against a baseline, and compute the health score, under one "
+                                   "output directory: OUT/profile, OUT/assessed and OUT/health_score.tsv.")
+    p.add_argument("--pipeline", required=True, choices=("assembly", "read"), help="which pipeline to run")
+    p.add_argument("--bundle", required=True, help=H["bundle"])
+    p.add_argument("--sample", required=True, help="sample id, used to name the outputs")
+    p.add_argument("--out", required=True, help="output directory; the run writes OUT/profile, OUT/assessed and OUT/health_score.tsv under it")
+    p.add_argument("--r1", help="FASTQ of read 1 (gzip is fine)")
+    p.add_argument("--r2", help="FASTQ of read 2, for paired reads")
+    p.add_argument("--contigs", help="assembly pipeline only: start from these contigs instead of assembling reads")
+    p.add_argument("--dbs", help="directory holding the pipeline's databases (default: $CHECKGM_DBS)")
+    p.add_argument("--image", help="Apptainer image to run in (default: $CHECKGM_IMAGE)")
+    p.add_argument("--threads", type=int, default=8, help="threads to give the pipeline (default 8)")
+    p.add_argument("--mem-gb", type=int, dest="mem_gb", help="memory in GB to give the pipeline")
+    p.add_argument("--calibration", default=None, help=H["calibration"])
+    p.add_argument("--dry-run", action="store_true", help="print what would run, and change nothing")
+    fg = p.add_mutually_exclusive_group()
+    fg.add_argument("--figures", dest="figures", action="store_true", default=True, help="draw the per-sample report figures (the default)")
+    fg.add_argument("--no-figures", dest="figures", action="store_false", help="skip the figures")
+    p.add_argument("--no-score", dest="score", action="store_false", default=True, help="stop after assessing, without the health score")
+    p.add_argument("--humann-genefamilies", dest="humann_genefamilies", nargs="+", default=None, help=argparse.SUPPRESS)
+    p.add_argument("--humann-pathabundance", dest="humann_pathabundance", nargs="+", default=None, help=argparse.SUPPRESS)
+
+    # the stages the five are built from, kept so a published command line keeps working
     sub.add_parser("bundles", help=f"list the bundles found under ${ENV_VAR}",
                    description=f"List the bundles found under ${ENV_VAR}: id, profile type (assembly or reads), pool size, path, and whether "
                                f"the bundle's series is the one this release was validated with.")
@@ -530,7 +834,7 @@ def build_parser() -> argparse.ArgumentParser:
                                    "Species-level rows are placed on the bundle's taxonomy; proportions over the bundle's basis are CLR-transformed. Writes the same "
                                    "files as 'normalize'; score them with 'checkgm score', or use 'run-metaphlan' to do both at once.")
     _add(p, "bundle", "input", "reads_tsv", "humann_genefamilies", "humann_pathabundance", "out", out="normalized")
-    p = sub.add_parser("score", help="score normalized tables against a bundle and write the report",
+    p = sub.add_parser("score-normalized", help="score normalized tables against a bundle and write the report",
                        description="Compare normalized tables (from normalize, import-mgnify or import-metaphlan) with the bundle. "
                                    "Writes scores.parquet (one row per sample x layer x feature), summaries.tsv (one row per sample x layer with the excess test), "
                                    "rejections.tsv and report.md.")
@@ -550,14 +854,32 @@ def build_parser() -> argparse.ArgumentParser:
 def _dispatch(a) -> int:
     if a.cmd == "bundles":
         return cmd_bundles(a)
+    if a.cmd == "setup":
+        return cmd_setup(a)
+    if a.cmd == "score":
+        # 'score' used to mean "compare normalized tables with a bundle", which is what 'assess' does now. Redirect its
+        # old flags in one line instead of letting argparse report them as unrecognized.
+        if a.bundle or a.normalized:
+            raise ValueError("'score' now computes the health score from an assessment; to compare normalized tables "
+                             "with a baseline use 'checkgm assess --bundle ... --input ...', or the unchanged stage "
+                             "command 'checkgm score-normalized --bundle ... --normalized ... --out ...'")
+        if not a.assessed or not a.out:
+            raise ValueError("'score' needs --assessed (a directory 'checkgm assess' wrote) and --out")
+        return cmd_health_score(a)
+    if a.cmd == "profile":
+        return cmd_profile(a)
     a.bundle = resolve_bundle(a.bundle)
-    if a.cmd != "score":
+    if a.cmd == "assess":
+        return cmd_assess(a)
+    if a.cmd == "end-to-end":
+        return cmd_end_to_end(a)
+    if a.cmd != "score-normalized":
         check_bundle_type(a.bundle, a.cmd)
     if a.cmd == "normalize":
         cmd_normalize(a)
     elif a.cmd == "import-mgnify":
         cmd_import_mgnify(a)
-    elif a.cmd == "score":
+    elif a.cmd == "score-normalized":
         cmd_score(a)
     elif a.cmd == "import-metaphlan":
         cmd_import_metaphlan(a)

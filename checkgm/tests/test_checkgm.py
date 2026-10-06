@@ -139,7 +139,7 @@ def test_cli_run_metaphlan_with_env_lookup(bundle, tmp_path, monkeypatch):
     S = pd.read_csv(out / "summaries.tsv", sep="\t")
     assert S["quality_band"].eq("low").all() and S["bundle_id"].eq(os.path.basename(bundle)).all()
     assert "# checkgm report" in (out / "report.md").read_text()
-    bad = subprocess.run([sys.executable, "-m", "checkgm.cli", "score", "--bundle", "no-such-bundle", "--normalized", str(out), "--out", str(tmp_path / "x")], capture_output=True, text=True, env=env)
+    bad = subprocess.run([sys.executable, "-m", "checkgm.cli", "score-normalized", "--bundle", "no-such-bundle", "--normalized", str(out), "--out", str(tmp_path / "x")], capture_output=True, text=True, env=env)
     assert bad.returncode != 0 and "not found" in (bad.stderr + bad.stdout)
 
 

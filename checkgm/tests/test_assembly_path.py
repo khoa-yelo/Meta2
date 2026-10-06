@@ -120,7 +120,7 @@ def test_normalize_then_score_through_the_cli(tmp_path):
     assert set(t["layer"]) == {"taxonomy_family", "taxonomy_genus", "ko_eggnog", "ko_kofam", "pfam", "module"}
     assert json.load(open(tmp_path / "norm" / "sample_meta.json"))["Q1"]["pipeline"]["name"] == "test-assembly"
 
-    r = run("score", "--bundle", bundle, "--normalized", str(tmp_path / "norm"), "--out", str(tmp_path / "rep"))
+    r = run("score-normalized", "--bundle", bundle, "--normalized", str(tmp_path / "norm"), "--out", str(tmp_path / "rep"))
     assert r.returncode == 0, r.stderr
     sc = pd.read_parquet(tmp_path / "rep" / "scores.parquet")
     assert set(sc["layer"]) == {"taxonomy_family", "taxonomy_genus", "ko_eggnog", "ko_kofam", "pfam", "module"}
@@ -140,7 +140,7 @@ def test_query_below_a_floor_is_rejected_not_an_error(tmp_path):
     c = pd.read_csv(q / "contigs.tsv", sep="\t"); c["length"] = 20_000; c.to_csv(q / "contigs.tsv", sep="\t", index=False)   # 2.4 Mb assembled
     r = run("normalize", "--bundle", bundle, "--query", str(q), "--out", str(tmp_path / "norm"))
     assert r.returncode == 0 and "BELOW_MIN_ASSEMBLY_QUALITY unbanded" in r.stdout
-    r = run("score", "--bundle", bundle, "--normalized", str(tmp_path / "norm"), "--out", str(tmp_path / "rep"))
+    r = run("score-normalized", "--bundle", bundle, "--normalized", str(tmp_path / "norm"), "--out", str(tmp_path / "rep"))
     assert r.returncode == 0, r.stderr
     rej = pd.read_csv(tmp_path / "rep" / "rejections.tsv", sep="\t")
     assert list(rej["reason_code"]) == ["NOT_NORMALIZED"] and "BELOW_MIN_ASSEMBLY_QUALITY" in rej.loc[0, "detail"]
@@ -153,7 +153,7 @@ def test_run_normalize_matches_normalize_then_score(tmp_path):
 
     two = tmp_path / "two"
     assert run("normalize", "--bundle", bundle, "--query", str(q), "--out", str(two / "norm")).returncode == 0
-    assert run("score", "--bundle", bundle, "--normalized", str(two / "norm"), "--out", str(two / "rep")).returncode == 0
+    assert run("score-normalized", "--bundle", bundle, "--normalized", str(two / "norm"), "--out", str(two / "rep")).returncode == 0
 
     one = tmp_path / "one"
     r = run("run-normalize", "--bundle", bundle, "--query", str(q), "--out", str(one))
@@ -185,7 +185,7 @@ def test_too_few_taxa_is_rejected_not_scored_as_nan(tmp_path):
     qc = pd.read_csv(tmp_path / "norm" / "qc.tsv", sep="\t")
     assert qc["status"].eq("TOO_FEW_TAXA_FOR_CLR").all(), qc[["sample_id", "status"]].to_dict("records")
 
-    r = run("score", "--bundle", bundle, "--normalized", str(tmp_path / "norm"), "--out", str(tmp_path / "rep"))
+    r = run("score-normalized", "--bundle", bundle, "--normalized", str(tmp_path / "norm"), "--out", str(tmp_path / "rep"))
     assert r.returncode == 0, r.stderr
     rej = pd.read_csv(tmp_path / "rep" / "rejections.tsv", sep="\t")
     assert len(rej) == 1 and "centred log-ratio" in rej.iloc[0]["detail"], rej.to_dict("records")

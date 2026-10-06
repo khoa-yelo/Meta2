@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- 2026-10-06, **the command-line interface is now five commands**: `setup`, `profile`, `assess`, `score` and
+  `end-to-end`. `assess` determines the kind of input from what the path holds (an assembly query directory, an MGnify
+  v5 analysis, a MetaPhlAn profile, or a directory `assess` itself wrote), so one command serves every entry point, and
+  it draws the per-sample report figure as well as the tables. `profile` runs a measurement pipeline and `setup`
+  fetches the baselines or a pipeline's databases; both check their prerequisites and refuse in one line before
+  starting a job that would otherwise fail after a 90 GB download. One rename affects existing command lines: `score`
+  now means the supervised health score, computed from an `assess` output, and what `score` used to do is `assess` or
+  the unchanged stage command `score-normalized`. The old flags given to `score` print that redirect. The eight stage
+  commands remain registered and unchanged, since the paper's methods name them.
+  - The shipped health-score model is the percentile-only fit (104 features, no species-presence term and so none of
+    the batch artifact the paper describes). It is exported complete — intercept, and per feature its coefficient and
+    the standardizer's centre and scale — because a coefficient table alone cannot score a sample; the previous export
+    could not have been applied by anyone. An assembly assessment is refused rather than scored, and a sample carrying
+    fewer features than the cohort's 1st percentile (12 of 104) is flagged as uninformative.
+  - `matplotlib` is an optional extra (`pip install "checkgm[figures]"`). Without it `assess` writes the tables and
+    says the figure was skipped, since the percentiles are the product and the figure is one rendering of them.
+  - Fixed, found while wiring the above: an empty call direction in a report panel drew the three worst features of
+    the other direction a second time (`DataFrame.assign` of a full-length Series onto an empty frame adopts the
+    Series' index instead of aligning to nothing); the panel ranked its extremes by percentile, which saturates at
+    0.5/99.5 so every badly deviant feature tied; the print profile was written into the process-global `rcParams`,
+    restyling later plots of any program embedding checkgm; an absent `matplotlib` raised `ModuleNotFoundError` past
+    the one-line error contract; and an assessment that rejected every sample crashed the figure writer.
+  - `README.md` corrected: the assembly databases are about 90 GB to download and 170 GB on disk, not the 70/110 GB
+    recorded before eggNOG and InterProScan were fully provisioned (the figures now reconcile to the byte against the
+    staged copy, excluding the hg38 index the pipeline does not use by default), and the note that the scoring image
+    still carried an entrypoint under the tool's former name was stale — it does not.
+
 - 2026-10-06, **the read-based out-of-sample scoring was wrong in two ways and has been corrected; every read-based
   number in this repository and in `paper/` comes from the re-run.** Both defects were in how the project decides which
   baseline scores a sample (`project/scripts/s12_oos_scores.py`), and both were found by auditing the one condition the

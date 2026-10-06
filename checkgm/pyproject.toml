@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "checkgm"
 version = "0.8.2"
-description = "Score a human gut metagenome against a healthy-adult reference baseline measured the same way (assembly-based or read-based pipeline)."
+description = "Score a human gut metagenome against a reference baseline of adults measured the same way (assembly-based or read-based pipeline)."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
@@ -29,6 +29,9 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
+# matplotlib is optional on purpose: the percentiles are the product and the report figure is one rendering of them,
+# so 'assess' says it skipped the figures rather than failing when it is absent.
+figures = ["matplotlib>=3.6"]
 
 [project.scripts]
 checkgm = "checkgm.cli:main"

@@ -76,7 +76,7 @@ def test_score_checks_bundle_type_against_normalized_data(bundles, tmp_path):
     prof = tmp_path / "S.txt"; write_profile(str(prof)); out = tmp_path / "norm"
     ok = run(["import-metaphlan", "--bundle", bundles["reads"], "--input", str(prof), "--out", str(out)])
     assert ok.returncode == 0, ok.stderr
-    res = run(["score", "--bundle", bundles["assembly"], "--normalized", str(out), "--out", str(tmp_path / "rep")])
+    res = run(["score-normalized", "--bundle", bundles["assembly"], "--normalized", str(out), "--out", str(tmp_path / "rep")])
     assert_one_line_error(res, "assembly-based baseline", "'score' needs a read-based")
 
 
@@ -110,9 +110,9 @@ def test_missing_analysis_dir(bundles, tmp_path):
 
 def test_score_on_directory_without_qc(bundles, tmp_path):
     d = tmp_path / "d"; d.mkdir()
-    res = run(["score", "--bundle", bundles["reads"], "--normalized", str(d), "--out", str(tmp_path / "o")])
+    res = run(["score-normalized", "--bundle", bundles["reads"], "--normalized", str(d), "--out", str(tmp_path / "o")])
     assert_one_line_error(res, "no qc.tsv")
-    res = run(["score", "--bundle", bundles["reads"], "--normalized", str(tmp_path / "absent"), "--out", str(tmp_path / "o")])
+    res = run(["score-normalized", "--bundle", bundles["reads"], "--normalized", str(tmp_path / "absent"), "--out", str(tmp_path / "o")])
     assert_one_line_error(res, "--normalized directory not found")
 
 
@@ -145,7 +145,7 @@ def test_import_then_score_equals_run(bundles, tmp_path):
     one = tmp_path / "one"; two = tmp_path / "two"
     assert run(["run-metaphlan", "--bundle", bundles["reads"], "--input", str(prof), "--out", str(one)]).returncode == 0
     assert run(["import-metaphlan", "--bundle", bundles["reads"], "--input", str(prof), "--out", str(two)]).returncode == 0
-    assert run(["score", "--bundle", bundles["reads"], "--normalized", str(two), "--out", str(two)]).returncode == 0
+    assert run(["score-normalized", "--bundle", bundles["reads"], "--normalized", str(two), "--out", str(two)]).returncode == 0
     assert (one / "summaries.tsv").read_bytes() == (two / "summaries.tsv").read_bytes()
     assert pd.read_parquet(one / "scores.parquet").equals(pd.read_parquet(two / "scores.parquet"))
     assert (one / "report.md").read_text() == (two / "report.md").read_text()
@@ -157,13 +157,14 @@ def test_main_returns_exit_status(bundles, tmp_path, monkeypatch):
 
 
 def test_help_has_one_sentence_per_argument():
-    for cmd in ["score", "run-metaphlan", "import-metaphlan", "run-mgnify", "import-mgnify", "normalize"]:
+    for cmd in ["score-normalized", "run-metaphlan", "import-metaphlan", "run-mgnify", "import-mgnify", "normalize", "assess", "end-to-end"]:
         res = run([cmd, "--help"])
         assert res.returncode == 0
         text = " ".join(res.stdout.split())
         assert "--bundle BUNDLE bundle directory" in text and "--out OUT output directory" in text, text
     top = run(["--help"]).stdout
-    for cmd in ["bundles", "normalize", "import-mgnify", "import-metaphlan", "score", "run-mgnify", "run-metaphlan"]:
+    for cmd in ["setup", "profile", "assess", "score", "end-to-end",
+                "bundles", "normalize", "import-mgnify", "import-metaphlan", "score-normalized", "run-mgnify", "run-metaphlan"]:
         # Python 3.10's argparse prints a long subcommand name on its own line, its help on the next; 3.12 puts both on one line
         assert any(l.strip() == cmd or l.strip().startswith(cmd + " ") for l in top.splitlines()), cmd
 
