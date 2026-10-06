@@ -34,11 +34,18 @@ def api(url, token, method="GET", payload=None, timeout=120):
 
 def put_file(bucket, name, path, token):
     """Upload through curl. Handing urllib an open file stalled on the bucket endpoint without transferring, and curl
-    also gives retries and resumable behaviour that matter for the ~800 MB container image."""
-    code = subprocess.run(["curl", "-s", "--retry", "3", "--retry-delay", "5", "--max-time", "7200",
-                           "-w", "%{http_code}", "-X", "PUT", "-H", f"Authorization: Bearer {token}",
-                           "--upload-file", path, f"{bucket}/{name}", "-o", os.devnull],
-                          capture_output=True, text=True).stdout.strip()
+    also gives retries and resumable behaviour that matter for the ~800 MB container image.
+
+    The token is fed to curl on stdin as a config file rather than as `-H "Authorization: Bearer ..."`, because an
+    argument is visible in the process table to every other user on the machine for as long as the upload runs, which
+    for this file is several minutes on a shared login node.
+    """
+    cfg = f'header = "Authorization: Bearer {token}"\n'
+    r = subprocess.run(["curl", "-s", "--retry", "3", "--retry-delay", "5", "--max-time", "7200",
+                        "-w", "%{http_code}", "-X", "PUT", "-K", "-",
+                        "--upload-file", path, f"{bucket}/{name}", "-o", os.devnull],
+                       input=cfg, capture_output=True, text=True)
+    code = r.stdout.strip()
     if code not in ("200", "201"):
         sys.exit(f"upload {name} -> HTTP {code}")
     return {"key": name}
@@ -48,7 +55,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sandbox", action="store_true", help="use sandbox.zenodo.org instead of the real archive")
     ap.add_argument("--publish", action="store_true", help="publish an existing draft; requires --id")
-    ap.add_argument("--id", help="deposition id of an existing draft")
+    ap.add_argument("--id", help="deposition id of an existing draft: with --publish it is published, otherwise its "
+                                 "missing files are uploaded (re-runnable; files already present at the right size are skipped)")
     a = ap.parse_args()
 
     token = os.environ.get("ZENODO_TOKEN")
@@ -71,12 +79,26 @@ def main():
         if not os.path.exists(os.path.join(REL, f)):
             sys.exit(f"missing file: release/{f}")
 
-    dep = api(f"{base}/deposit/depositions", token, "POST", {"metadata": meta})
+    if a.id:
+        # Resume uploading into an existing draft. Uploads are the slow part and a 783 MB transfer can be interrupted,
+        # so this has to be re-runnable without creating a second draft and a second reserved DOI.
+        dep = api(f"{base}/deposit/depositions/{a.id}", token)
+        if dep.get("submitted"):
+            sys.exit(f"draft {a.id} is already published; uploading to it would need a new version")
+    else:
+        dep = api(f"{base}/deposit/depositions", token, "POST", {"metadata": meta})
     dep_id, bucket = dep["id"], dep["links"]["bucket"]
     doi = dep["metadata"].get("prereserve_doi", {}).get("doi") or dep.get("doi")
-    print(f"draft {dep_id} created; reserved DOI: {doi}")
+    print(f"draft {dep_id} {'reused' if a.id else 'created'}; reserved DOI: {doi}")
 
-    present = {f["key"]: f["size"] for f in api(f"{base}/deposit/depositions/{dep_id}/files", token)}
+    # The deposit files endpoint names them filename/filesize; the bucket API uses key/size. Accept both so this works
+    # on a draft listed either way.
+    present = {}
+    for f in api(f"{base}/deposit/depositions/{dep_id}/files", token):
+        name = f.get("key") or f.get("filename")
+        size = f.get("size") if f.get("size") is not None else f.get("filesize")
+        if name is not None:
+            present[name] = size
     for f in spec["files"]:
         path = os.path.join(REL, f); size = os.path.getsize(path)
         if present.get(f) == size:

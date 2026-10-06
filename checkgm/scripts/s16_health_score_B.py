@@ -120,10 +120,30 @@ for name, g in R.groupby("feature_set", sort=False):
                      "wilcoxon_p_vs_gmwi2": wilcoxon(d).pvalue if len(h) >= 6 else np.nan, "median_nonzero_features": h.n_nonzero.median()})
 Sm = pd.DataFrame(summ)
 # final model on all samples, best feature set, C by grouped CV, for the coefficient table
-best = "pct+summary+presence" if LAY in ("tax", "rawcmp") else "pct+summary+presence+function"   # primary model, fixed before results (configs/decisions.yaml health_score_prespec)
+# which feature set's coefficients are persisted. The pre-specified primary model is pct+summary+presence, but its
+# single largest coefficient is the [Collinsella] massiliensis batch artifact, so COEF_SET=pct dumps the percentile-only
+# variant instead -- the one the paper reports as immune to that artifact and no worse on the unseen studies.
+best = os.environ.get("COEF_SET") or ("pct+summary+presence" if LAY in ("tax", "rawcmp") else "pct+summary+presence+function")
+if best not in SETS:
+    raise SystemExit(f"COEF_SET={best!r} is not one of {sorted(SETS)}")
 Xb = pd.concat(SETS[best], axis=1); Xb = Xb[[c for c in Xb.columns if not c.startswith("present:") or Xb[c].mean() >= 0.005]]; cv = {C: np.mean([roc_auc_score(y[b], model(C).fit(Xb.values[a], y[a]).decision_function(Xb.values[b])) for a, b in GroupKFold(5).split(Xb, y, grp)]) for C in CS}
 mf = model(max(cv, key=cv.get)).fit(Xb.values, y); coef = pd.Series(mf[-1].coef_[0], index=Xb.columns); coef = coef[coef != 0].sort_values()
 coef.rename("coefficient").to_csv(f"{OUT}/health_score_B{SUF}_coefficients.tsv", sep="\t")
+# A coefficient table alone cannot score a new sample: the model is a StandardScaler followed by the regression, so the
+# per-feature centre and scale and the intercept are part of it. Export the whole thing, keeping only the features with a
+# non-zero coefficient, so that checkgm.healthscore can apply it without sklearn and without this workspace.
+import json as _json
+_sc, _lr = mf[0], mf[-1]
+_keep = [c for c in Xb.columns if c in set(coef.index)]
+_idx = [Xb.columns.get_loc(c) for c in _keep]
+_json.dump({
+    "model": "L1-penalised logistic regression on checkGM output, standardized features",
+    "feature_set": best, "trained_on": {"samples": int(len(S)), "cases": int(y.sum()), "studies": int(len(set(st))), "training_studies": TRAIN},
+    "C": float(_lr.C), "intercept": float(_lr.intercept_[0]),
+    "orientation": "higher score = more case-like; decision_function of the disease class",
+    "features": [{"name": c, "coef": float(coef[c]), "mean": float(_sc.mean_[i]), "scale": float(_sc.scale_[i])} for c, i in zip(_keep, _idx)],
+}, open(f"{OUT}/health_score_B{SUF}_model.json", "w"), indent=1)
+print(f"wrote {OUT}/health_score_B{SUF}_model.json with {len(_keep)} features")
 L = [f"# Supervised health-vs-disease score on refmb output (read pipeline), leave one study out; training studies: {TRAIN}; layers: {LAY}\n",
      f"{len(S):,} samples ({y.sum():,} cases) from {len(set(st))} studies; evaluated on the 14 case/control studies, each scored by a model trained without it. GMWI2 is scored as published (its training set includes 10 of the 14 studies).\n",
      Sm.round(3).to_markdown(index=False), f"\nFinal model ({best}, all samples): {len(coef)} non-zero features (results/s16/health_score_B_coefficients.tsv).\n",
