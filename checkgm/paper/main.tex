@@ -8,12 +8,12 @@
 
 \begin{document}
 
-\title{checkGM: healthy reference ranges for gut metagenomes,\\shipped with the pipelines that measure them}
+\title{checkGM: A Reference-Based Framework for Interpreting\\Gut Microbiome Composition}
 \author{\IEEEauthorblockN{[Authors]}\IEEEauthorblockA{[Affiliation]}}
 \maketitle
 
 \begin{abstract}
-Hundreds of abundances are reported for every gut metagenome, and none of them is accompanied by a statement of what is normal. In clinical chemistry that statement is supplied by a reference interval measured in healthy people on the same assay; metagenomics has no equivalent, so normality is redefined by each study from its own controls and an isolated sample cannot be interpreted at all. checkGM is presented here as a remedy: two standard analysis pipelines are distributed together with baselines of healthy adults processed identically, and every taxon, gene family and pathway of a new sample is reported as a percentile among those adults. MGnify v5 is reproduced by the assembly pipeline (1{,}941 adults, 26 studies) and curatedMetagenomicData~3 by the read pipeline (6{,}494 adults, 19 studies). Healthy cohorts the baselines had never seen were found to fall outside the healthy range at close to the expected 5\%, and in studies held out of training a pre-specified sparse score built on the percentiles matched the published Gut Microbiome Wellness Index~2 without that index's overlap with the test studies, while using half as many features as the same model trained on raw abundances. What distinguishes such percentiles from a score is that they explain themselves: the loss of obligate anaerobes is read off individual \cdiff{} patients, the depletion of butyrate producers across nine colorectal cancer cohorts, and the genera that place Hadza hunter-gatherers outside an industrialized healthy range.
+Gut metagenome profiling reports hundreds of abundances without stating which of them are unusual, because the field has no reference against which an individual value can be judged. checkGM is a reference-based framework that supplies one. Two standard analysis pipelines are distributed together with baselines of healthy adults processed identically, so that every taxon, gene family and pathway of a new sample is reported as a percentile among those adults, with a call of within, below or above the healthy range. MGnify v5 is reproduced by the assembly pipeline (1{,}941 adults, 26 studies) and curatedMetagenomicData~3 by the read pipeline (6{,}494 adults, 19 studies), and each baseline travels as summary statistics alone. The framework is shown to be calibrated, healthy cohorts it had never seen falling outside the healthy range at close to the expected 5\%, and to cost nothing in predictive power: a pre-specified sparse score built on the percentiles matches the published Gut Microbiome Wellness Index~2 without that index's overlap with the test studies, and does so with half as many features as the same model trained on raw abundances. What the reference adds is interpretation. The loss of obligate anaerobes is read directly off individual \cdiff{} patients, the depletion of butyrate producers is recovered across nine colorectal cancer cohorts on one common scale, and the taxa that place Hadza hunter-gatherers outside an industrialized range are named rather than merely scored.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -26,7 +26,7 @@ Any clinical measurement that is acted upon is interpreted against a reference i
 
 The gap cannot be blamed on a shortage of healthy data, since tens of thousands of healthy gut metagenomes have been deposited, but is explained by two properties of the data that exist. A range is valid only for measurements produced the same way, because profiles from different pipelines are not interchangeable~\cite{sczyrba2017}, so a range and its software must be distributed as one object; and public cohorts are released as per-sample tables that must be re-processed before anything new can be compared against them. What has been missing is consequently not another healthy cohort but a pipeline carrying its own baseline.
 
-checkGM was built to supply exactly that (Fig.~\ref{fig:overview}). Two public resources are reproduced by its pipelines, MGnify v5~\cite{richardson2023} by an assembly-based one and curatedMetagenomicData~3 (cMD3)~\cite{pasolli2017} by a read-based one, each carrying a baseline of healthy adults drawn from the resource it reproduces and held as summary statistics alone: no samples, a few megabytes. Once raw reads are supplied, every feature is returned with its percentile among healthy adults, a call of within, below or above the healthy range, and the features most healthy adults carry but this sample lacks. Three claims are made for that output below and taken up in turn: that it is calibrated, that it carries as much disease information as a published index, and that, unlike a score, it says what is unusual.
+checkGM is the framework proposed here to supply exactly that (Fig.~\ref{fig:overview}). Two public resources are reproduced by its pipelines, MGnify v5~\cite{richardson2023} by an assembly-based one and curatedMetagenomicData~3 (cMD3)~\cite{pasolli2017} by a read-based one, each carrying a baseline of healthy adults drawn from the resource it reproduces and held as summary statistics alone: no samples, a few megabytes. Once raw reads are supplied, every feature is returned with its percentile among healthy adults, a call of within, below or above the healthy range, and the features most healthy adults carry but this sample lacks. The framework is assessed below against three requirements, taken in turn. It must be calibrated, or the ranges mean nothing; it must not cost predictive power, or interpretation would be bought at the expense of accuracy; and it must deliver what a single score cannot, namely a statement of what is unusual in a given sample.
 
 \begin{figure*}[t]
 \centering
@@ -100,7 +100,7 @@ So that those indices would be met on their own ground, a sparse health score on
 
 If the stored quantiles describe healthy adults, then healthy adults a baseline has never seen should fall outside its range about 5\% of the time. This is what is observed. Across held-out cohorts and left-out baseline studies the median is 5.3\% of families in the assembly baseline and 4.0\% in the read baseline, and the picture for genes and pathways is the same (Fig.~\ref{fig:methods}c). They are also reproducible outside the group that built them, since re-running either pipeline from deposited raw reads returns the percentiles of the resource it reproduces, with a median Spearman $\rho$ between 0.86 and 0.99 across layers in 61 MGnify samples and of 1.00 in 34 cMD3 samples (Fig.~\ref{fig:methods}d). What the percentiles are worth as evidence can then be asked.
 
-\subsection{Percentiles carry as much disease information as a published index}
+\subsection{Interpretability is not paid for in predictive power}
 
 \begin{figure*}[t]
 \centering
@@ -117,7 +117,7 @@ The harder comparison is with GMWI2, which reaches 0.72 on the same 14 studies a
 
 Two cautions attach to that score, and neither is found to account for its accuracy. Processing artifacts are inherited by its species-presence features. \textit{[Collinsella] massiliensis} is present in most controls and absent from every case of three cMD3 studies, and this batch difference is seized upon by the model as its strongest single feature; it is nevertheless invisible to a percentile-only variant, which performs as well on the four unseen studies (0.64). When training is further restricted to the studies that contain both cases and controls, so that study identity cannot stand in for the label, 0.72 is still obtained.
 
-\subsection{The same output explains itself, one patient at a time}
+\subsection{Reading a single sample against the reference}
 
 \begin{figure*}[t]
 \centering
@@ -145,7 +145,7 @@ The genera responsible are named as well, which no single score could do (Fig.~\
 
 \section{Discussion}
 
-A single gut metagenome is given, by checkGM, a position among healthy adults processed the same way, and that position is shipped with the software producing it. Treated as a predictor, a score built on this output matches a published health index without inheriting that index's overlap with the test studies; treated as a report, it states which taxa, genes and pathways are unusual and by how much. One sample can accordingly be read without a control group, all samples are placed on one scale, and the baseline travels as statistics alone.
+checkGM places a single gut metagenome among healthy adults processed the same way, and ships that reference with the software producing it. Treated as a predictor, a score built on this output matches a published health index without inheriting that index's overlap with the test studies; treated as a report, it states which taxa, genes and pathways are unusual and by how much. One sample can accordingly be read without a control group, all samples are placed on one scale, and the baseline travels as statistics alone.
 
 The limits are visible in the same figures. On the four studies neither model had seen, the score only ties GMWI2, and the recovery of known biology is in any case partial. \textit{Blautia} and \textit{Faecalibacterium} are found higher in cases in two inflammatory bowel disease studies, against their well-replicated depletion~\cite{lloydprice2019,franzosa2019}. Taxa that are enriched in colorectal cancer but rare in healthy adults, among them \textit{Fusobacterium nucleatum} and \textit{Parvimonas}, fall below the prevalence filter and receive no percentile at all, since a reference range can speak only about the features healthy people carry. The Hadza result bounds the claim geographically, and population cannot in either cohort be separated from study.
 
