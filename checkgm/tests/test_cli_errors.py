@@ -26,9 +26,9 @@ def bundles(tmp_path_factory):
 
 def run(args, env_root=None, cwd=None):
     env = dict(os.environ)
-    env.pop("REFMB_BUNDLES", None)
+    env.pop("CHECKGM_BUNDLES", None)
     if env_root:
-        env["REFMB_BUNDLES"] = env_root
+        env["CHECKGM_BUNDLES"] = env_root
     return subprocess.run([sys.executable, "-m", "checkgm.cli", *args], capture_output=True, text=True, env=env, cwd=cwd)
 
 
@@ -44,7 +44,7 @@ def assert_one_line_error(res, *fragments):
 def test_unknown_bundle_without_env(bundles, tmp_path):
     prof = tmp_path / "S.txt"; write_profile(str(prof))
     res = run(["run-metaphlan", "--bundle", "gut-reads-test-v0.2-lenient", "--input", str(prof), "--out", str(tmp_path / "o")])
-    assert_one_line_error(res, "not found", "REFMB_BUNDLES")
+    assert_one_line_error(res, "not found", "CHECKGM_BUNDLES")
 
 
 def test_bundle_typo(bundles, tmp_path):
@@ -152,7 +152,7 @@ def test_import_then_score_equals_run(bundles, tmp_path):
 
 
 def test_main_returns_exit_status(bundles, tmp_path, monkeypatch):
-    monkeypatch.delenv("REFMB_BUNDLES", raising=False)
+    monkeypatch.delenv("CHECKGM_BUNDLES", raising=False)
     assert main(["run-metaphlan", "--bundle", "no-such", "--input", "x.txt", "--out", str(tmp_path / "o")]) == 1
 
 
@@ -166,3 +166,22 @@ def test_help_has_one_sentence_per_argument():
     for cmd in ["bundles", "normalize", "import-mgnify", "import-metaphlan", "score", "run-mgnify", "run-metaphlan"]:
         # Python 3.10's argparse prints a long subcommand name on its own line, its help on the next; 3.12 puts both on one line
         assert any(l.strip() == cmd or l.strip().startswith(cmd + " ") for l in top.splitlines()), cmd
+
+
+def test_legacy_bundles_env_still_resolves():
+    """The variable was called REFMB_BUNDLES before the tool was renamed; it is still honoured so that existing
+    setups keep working, and CHECKGM_BUNDLES wins when both are set."""
+    from checkgm import paths
+    import os
+    old = {k: os.environ.get(k) for k in ("CHECKGM_BUNDLES", "REFMB_BUNDLES")}
+    try:
+        os.environ.pop("CHECKGM_BUNDLES", None)
+        os.environ["REFMB_BUNDLES"] = "/legacy"
+        assert paths.bundle_dirs() == ["/legacy"]
+        os.environ["CHECKGM_BUNDLES"] = "/current"
+        assert paths.bundle_dirs() == ["/current"]
+    finally:
+        for k, v in old.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v

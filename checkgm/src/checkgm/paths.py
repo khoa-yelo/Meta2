@@ -2,20 +2,21 @@
 
 A bundle argument on the command line is either a path to a bundle directory (one containing manifest.json) or a bundle id such
 as ``gut-reads-adult-global-v0.2-lenient``. Ids are looked up in the directories listed in the environment variable
-``REFMB_BUNDLES`` (colon-separated, like PATH). Nothing here depends on where the package was developed.
+``CHECKGM_BUNDLES`` (colon-separated, like PATH). Nothing here depends on where the package was developed.
 """
 from __future__ import annotations
 
 import os
 
-ENV_VAR = "REFMB_BUNDLES"
+ENV_VAR = "CHECKGM_BUNDLES"
+LEGACY_ENV_VAR = "REFMB_BUNDLES"   # the name used before the tool was renamed; still read, so existing setups keep working
 DEFAULT_ASSEMBLY_VERSION = "0.8"   # current assembly-based bundle series
 DEFAULT_READS_VERSION = "0.2"      # current read-based bundle series
 
 
 def bundle_dirs() -> list[str]:
-    """Directories searched for bundle ids, from REFMB_BUNDLES."""
-    v = os.environ.get(ENV_VAR, "")
+    """Directories searched for bundle ids, from CHECKGM_BUNDLES (or the legacy REFMB_BUNDLES)."""
+    v = os.environ.get(ENV_VAR) or os.environ.get(LEGACY_ENV_VAR, "")
     return [d for d in v.split(os.pathsep) if d]
 
 
@@ -38,7 +39,7 @@ def resolve_bundle(spec: str) -> str:
 
 
 def list_bundles() -> list[str]:
-    """Bundle directories found under REFMB_BUNDLES."""
+    """Bundle directories found under CHECKGM_BUNDLES."""
     out = []
     for d in bundle_dirs():
         if os.path.isdir(d):

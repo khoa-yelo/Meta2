@@ -56,7 +56,7 @@ Bundles, the assembly-based pipeline image and the baseline pool accession lists
 mkdir -p ~/checkgm_bundles && cd ~/checkgm_bundles
 sha256sum -c <<< "ab6b82bdc62b72dcfa860ea2dbf0e7d6e750c8058723721c3b2e7f25415b5c0e  gut-reads-adult-global-v0.2-lenient.tar.gz"
 tar xzf gut-reads-adult-global-v0.2-lenient.tar.gz
-export REFMB_BUNDLES=~/checkgm_bundles     # bundle ids are looked up here; a directory path works without it
+export CHECKGM_BUNDLES=~/checkgm_bundles     # bundle ids are looked up here; a directory path works without it
 checkgm bundles
 ```
 
@@ -83,7 +83,7 @@ checkgm run-metaphlan --bundle gut-reads-adult-global-v0.2-lenient \
 cat example_report/report.md
 ```
 
-The bundle `gut-reads-adult-global-v0.2-lenient` must already be unpacked under `$REFMB_BUNDLES` (previous section);
+The bundle `gut-reads-adult-global-v0.2-lenient` must already be unpacked under `$CHECKGM_BUNDLES` (previous section);
 the baselines and the container image will be deposited at Zenodo, DOI [TBD]. Expected: the sample is scored on the family, genus and species layers (quality band `high`, 45 million reads), with
 28, 56 and 102 features assessed and 187 score rows in total; the fraction of features outside the reference band is
 0.000 on every layer and no layer shows a significant excess, as it must be for a profile sitting at the reference

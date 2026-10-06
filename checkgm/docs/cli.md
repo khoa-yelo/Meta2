@@ -13,7 +13,7 @@ checkgm run-metaphlan    --bundle B --input PROFILE [PROFILE ...] [--reads-tsv F
 
 `B` is either a bundle directory (one containing `manifest.json`) or a bundle id such as
 `gut-reads-adult-global-v0.2-lenient`, which is looked up in the directories listed in the environment variable
-`REFMB_BUNDLES` (colon-separated). An unknown bundle is reported with the places that were searched. Every bundle is
+`CHECKGM_BUNDLES` (colon-separated). An unknown bundle is reported with the places that were searched. Every bundle is
 either assembly-based (`gut-assembly-*`, `profile_type: assembly`) or read-based (`gut-reads-*`, `profile_type: reads`);
 `normalize`, `import-mgnify` and `run-mgnify` need an assembly-based bundle, `import-metaphlan` and `run-metaphlan` a
 read-based one, and `score` checks the bundle against what the normalized directory was made from. A mismatch is
@@ -28,7 +28,7 @@ both into one directory.
 
 ## `checkgm bundles`
 
-Lists the bundles found under `$REFMB_BUNDLES`: id, profile type (`assembly` or `reads`), pool size and path.
+Lists the bundles found under `$CHECKGM_BUNDLES`: id, profile type (`assembly` or `reads`), pool size and path.
 
 ## `checkgm normalize` (assembly-based, any pipeline)
 

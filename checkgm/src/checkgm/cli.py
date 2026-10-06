@@ -8,9 +8,9 @@
   checkgm import-metaphlan --bundle B --input PROFILE [...] [--reads-tsv sample<TAB>reads] --out OUT   # read-based: MetaPhlAn output -> normalized
   checkgm run-metaphlan --bundle B --input PROFILE [...] --out REPORT           # import + score against a read-based baseline
         [--humann-genefamilies FILE ...] [--humann-pathabundance FILE ...]   # optional HUMAnN 3 tables -> function layers
-  checkgm bundles                                                               # list the bundles found under $REFMB_BUNDLES
+  checkgm bundles                                                               # list the bundles found under $CHECKGM_BUNDLES
 
-B is a bundle directory or a bundle id looked up under $REFMB_BUNDLES (colon-separated directories).
+B is a bundle directory or a bundle id looked up under $CHECKGM_BUNDLES (colon-separated directories).
 Sample id = sample.json sample_id, else the directory name.
 
 User errors (missing file, wrong kind of bundle, unreadable input) are reported on stderr as one line starting with
@@ -319,7 +319,7 @@ def cmd_score(a, norm=None, cal=None):
 
 
 def cmd_bundles(a):
-    """`checkgm bundles`: list the bundles found under $REFMB_BUNDLES (id, profile type, pool size, path)."""
+    """`checkgm bundles`: list the bundles found under $CHECKGM_BUNDLES (id, profile type, pool size, path)."""
     found = list_bundles()
     if not bundle_dirs():
         print(f"{ENV_VAR} is not set; give --bundle a directory path or export {ENV_VAR}=/dir/with/bundles", file=sys.stderr)

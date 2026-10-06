@@ -127,10 +127,10 @@ def test_unresolvable_profile_is_rejected(bundle):
 
 def test_cli_run_metaphlan_with_env_lookup(bundle, tmp_path, monkeypatch):
     prof = tmp_path / "S2.txt"; write_profile(str(prof), reads=5_000_000)
-    monkeypatch.setenv("REFMB_BUNDLES", os.path.dirname(bundle))
+    monkeypatch.setenv("CHECKGM_BUNDLES", os.path.dirname(bundle))
     assert resolve_bundle(os.path.basename(bundle)) == bundle
     out = tmp_path / "report"
-    env = dict(os.environ, REFMB_BUNDLES=os.path.dirname(bundle))
+    env = dict(os.environ, CHECKGM_BUNDLES=os.path.dirname(bundle))
     res = subprocess.run([sys.executable, "-m", "checkgm.cli", "run-metaphlan", "--bundle", os.path.basename(bundle), "--input", str(prof), "--out", str(out)],
                          capture_output=True, text=True, env=env)
     assert res.returncode == 0, res.stderr
