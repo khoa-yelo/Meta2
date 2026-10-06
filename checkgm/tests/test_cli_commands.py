@@ -13,6 +13,8 @@ import sys
 import pandas as pd
 import pytest
 
+from checkgm import report_figures
+
 from test_checkgm import make_bundle, write_profile
 
 
@@ -40,8 +42,13 @@ def test_assess_detects_a_metaphlan_profile_and_writes_the_report(reads, tmp_pat
     assert r.returncode == 0, r.stderr
     for f in ("scores.parquet", "summaries.tsv", "rejections.tsv", "report.md"):
         assert (out / f).is_file(), f
-    assert (out / "figures" / "S1_range_report.png").is_file()      # figures are on by default
-    assert "figures: 1 written" in r.stdout
+    # figures are on by default, but matplotlib is an optional extra: without it 'assess' must still write the tables
+    # above and say the figure was skipped, which is the whole point of the dependency being optional.
+    if report_figures.available():
+        assert (out / "figures" / "S1_range_report.png").is_file()
+        assert "figures: 1 written" in r.stdout
+    else:
+        assert "figures: skipped" in r.stdout and not (out / "figures").exists()
 
 
 def test_assess_no_figures_writes_the_tables_only(reads, tmp_path):
