@@ -164,7 +164,7 @@ fig1 <- function() {
     geom_tile(aes(x = (q1 + q3) / 2, width = q3 - q1), height = 0.62, fill = IQR) +
     geom_tile(aes(x = 0), width = 0.14, height = 0.78, fill = MED) +
     geom_point(data = filter(r, call != "absent"), aes(x = x, fill = call), shape = 21, colour = "white", size = 2.1, stroke = 0.3) +
-    geom_point(data = filter(r, call == "absent"), aes(x = XL[1] + 0.35), shape = 21, colour = LOW, fill = "white", size = 1.9, stroke = 0.6) +
+    geom_point(data = filter(r, call == "absent"), aes(x = XL[1] + 0.35), shape = 21, colour = LOW_L, fill = "white", size = 2.1, stroke = 0.9) +
     geom_text(aes(x = XL[2] + 0.4, label = txt), hjust = 0, size = pt(6.2), family = FONT, colour = INK2) +
     facet_grid(layer ~ ., scales = "free_y", space = "free_y", switch = "y") +
     scale_fill_manual(values = c(low = LOW, high = HIGH, within = WITHIN), guide = "none") +
@@ -254,7 +254,7 @@ fig2 <- function() {
   # would have left a tenth of each facet blank. The lone point at 20 % against a next-highest 13 % is unmistakable.
   c_ <- ggplot(ca, aes(x = frac, y = layer)) + geom_vline(xintercept = 5, colour = MUTED, linewidth = 0.35, linetype = "22") +
     geom_point(aes(shape = kind), position = position_jitter(height = 0.18, width = 0, seed = 1), size = 0.9, colour = INK2, stroke = 0.35, alpha = 0.8) +
-    geom_point(data = med, aes(x = m), shape = 124, size = 3.2, colour = ACC) +
+    geom_point(data = med, aes(x = m), shape = 124, size = 3.2, colour = MED) +
     facet_wrap(~pipeline, ncol = 1, scales = "free_y") + scale_shape_manual(values = c(16, 1), name = NULL) +
     scale_y_discrete(expand = expansion(add = c(0.45, 0.7))) +
     scale_x_continuous(limits = c(0, 25), breaks = c(0, 5, 10, 15, 20, 25), labels = function(x) paste0(x, "%"), expand = c(0, 0.3)) +
@@ -268,8 +268,8 @@ fig2 <- function() {
   fm <- fi %>% group_by(pipeline, layer) %>% summarise(m = median(rho), n = n())
   d <- ggplot(fi, aes(x = rho, y = layer)) +
     geom_point(position = position_jitter(height = 0.18, width = 0, seed = 1), size = 0.8, colour = INK2, alpha = 0.55, stroke = 0) +
-    geom_point(data = fm, aes(x = m), shape = 124, size = 3.2, colour = ACC) +
-    geom_text(data = fm, aes(x = 0.405, label = sprintf("%.2f", m)), hjust = 0, size = pt(6), family = FONT, colour = ACC) +
+    geom_point(data = fm, aes(x = m), shape = 124, size = 3.2, colour = MED) +
+    geom_text(data = fm, aes(x = 0.405, label = sprintf("%.2f", m)), hjust = 0, size = pt(6), family = FONT, colour = MED) +
     facet_wrap(~pipeline, ncol = 1, scales = "free_y") +
     scale_x_continuous(limits = c(0.4, 1.0), breaks = c(0.4, 0.6, 0.8, 1.0), expand = c(0, 0.01)) +
     labs(x = "Spearman ρ with source percentiles", y = NULL, title = "reproduced from raw reads") +

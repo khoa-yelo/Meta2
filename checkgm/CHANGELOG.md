@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- 2026-10-06, `checkgm run-normalize` added: the one-step form of `normalize` followed by `score`, which the
+  `run-mgnify` and `run-metaphlan` pairs already had and the generic assembly path did not. A test asserts that
+  its `scores.parquet` is identical to the two-step result, so the shortcut cannot drift from the path it
+  replaces. The README and the tier-A container recipe now point assembly users at it.
+
 - 2026-10-06, documentation review round 6. Four claims that round 5 either introduced or strengthened past what the
   repository's own files support have been withdrawn. The README no longer asserts that `scripts/viz2/` matches the
   project workspace exactly, an equality that could not hold of a tree still being edited and did not hold when

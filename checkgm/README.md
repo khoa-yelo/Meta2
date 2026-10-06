@@ -125,7 +125,8 @@ given to an assembly command or the other way round, a missing input file, or a 
   `cd container && apptainer build checkgm_tierA.sif checkgm_tierA.def`) pins the MGnify v5 tool versions.
   `container/fetch_dbs.sh` and `unpack_dbs.sh` fetch the reference databases (about 70 GB compressed, 110 GB unpacked;
   downloaded once). `container/run_tierA.sh` goes from reads to a *query directory* (`docs/query_format.md`), which
-  `checkgm normalize` + `checkgm score` turn into a report. Assembly needs roughly 16 CPUs and 128 GB of memory per sample.
+  `checkgm run-normalize` turns into a report (or `checkgm normalize` then `checkgm score`, if you want the
+  normalized tables separately). Assembly needs roughly 16 CPUs and 128 GB of memory per sample.
 - **Scoring-only image:** `container/Dockerfile` installs just the package, and is built from this directory with
   `podman build -t checkgm:0.8.2 -f container/Dockerfile .` (the tag has to be lowercase, which both podman and docker
   insist on). One caveat applies to the built image rather than to the build: the recipe still carries the entrypoint

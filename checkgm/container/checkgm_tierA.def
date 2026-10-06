@@ -31,5 +31,5 @@ From: mambaorg/micromamba:1.5.8
     checkgm assembly-based pipeline container. Databases (~70 GB compressed) are not included: run fetch_dbs.sh <dbdir> once, unpack the
     .gz / InterProScan tarball there, then:
       apptainer run --bind <dbdir>:/dbs,<work>:/work checkgm_tierA.sif --sample S --out /work/S --dbs /dbs --r1 /work/R1.fq.gz --r2 /work/R2.fq.gz
-    Output /work/S/query is a checkgm query directory: score it with `checkgm normalize` + `checkgm score` against an assembly-based
+    Output /work/S/query is a checkgm query directory: score it with `checkgm run-normalize` against an assembly-based
     bundle (gut-assembly-adult-global-*). Build from the container/ directory: cd container && apptainer build checkgm_tierA.sif checkgm_tierA.def
