@@ -19,7 +19,7 @@ From: mambaorg/micromamba:1.5.8
 
 %environment
     export PATH=/opt/conda/bin:/opt/checkgm:$PATH
-    export REFMB_PY=/opt/conda/bin/python
+    export CHECKGM_PY=/opt/conda/bin/python
     export SPADES_BIN=/opt/conda/bin
     export EMAPPER_PY=/opt/conda/envs/py27/bin/python
     export JAVA8_BIN=/opt/conda/envs/java8/bin

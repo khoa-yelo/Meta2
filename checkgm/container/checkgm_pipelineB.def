@@ -24,8 +24,8 @@ From: mambaorg/micromamba:1.5.8
 
 %environment
     export PATH=/opt/conda/envs/mpa3/bin:/opt/conda/bin:/opt/checkgm:$PATH
-    export REFMB_BIN=/opt/conda/bin/checkgm
-    export REFMB_BUNDLES=${REFMB_BUNDLES:-/bundles}
+    export CHECKGM_BIN=/opt/conda/bin/checkgm
+    export CHECKGM_BUNDLES=${CHECKGM_BUNDLES:-/bundles}
 
 %runscript
     exec bash /opt/checkgm/run_pipelineB.sh "$@"

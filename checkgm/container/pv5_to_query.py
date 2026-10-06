@@ -156,7 +156,7 @@ def build(a):
     except ImportError:
         checkgm_version = "unknown"
     json.dump({"sample_id": a.sample, "body_site": "Gut", "pipeline": {"name": "checkgm-assembly", "version": checkgm_version, "measurement": "MGnify pipeline v5.0 equivalent",
-               "tools": {"assembler": os.environ.get("REFMB_ASSEMBLER", "metaSPAdes 3.15.3"), "cds": "Prodigal 2.6.3 + FragGeneScan 1.31", "taxonomy": "DIAMOND 0.9.25 / UniRef90 2019_11", "ko": "eggNOG-mapper 2.0.0 (MGnify v5 eggnog.db)",
+               "tools": {"assembler": os.environ.get("CHECKGM_ASSEMBLER", "metaSPAdes 3.15.3"), "cds": "Prodigal 2.6.3 + FragGeneScan 1.31", "taxonomy": "DIAMOND 0.9.25 / UniRef90 2019_11", "ko": "eggNOG-mapper 2.0.0 (MGnify v5 eggnog.db)",
                          "pfam": "InterProScan 5.36-75.0 Pfam", "kofam": "HMMER 3.2.1 / KOfam KEGG 90.0", "modules": "MGnify give_pathways"}}}, open(f"{a.out}/sample.json", "w"), indent=1)
     print(f"query dir {a.out}: contigs {len(contigs)}, CDS {len(cds)}, with KO {cds.ko.ne('').sum()}, with Pfam {cds.pfam.ne('').sum()}, taxonomy hits {len(tax)}")
 

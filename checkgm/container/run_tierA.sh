@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# refmb assembly-based pipeline — raw reads (or contigs) -> MGnify-pipeline-v5-equivalent annotations -> refmb query directory.
+# checkgm assembly-based pipeline — raw reads (or contigs) -> MGnify-pipeline-v5-equivalent annotations -> checkgm query directory.
 # Pinned to the reference's measurement (docs.mgnify.org v5.0 + EBI-Metagenomics/pipeline-v5 job values, see container/pv5_ref):
 #   metaSPAdes 3.15.3 (paired reads, with error correction; MEGAHIT 1.2.9 for single-end) | contigs >= 500 bp | Prodigal 2.6.3 (-p meta) + FragGeneScan 1.31 (illumina_5), Prodigal priority
 #   DIAMOND 0.9.25 blastp --max-target-seqs 1 vs UniRef90 2019_11, taxonomy via db_uniref90_result
@@ -19,7 +19,7 @@ while [[ $# -gt 0 ]]; do case $1 in
 if [ "$ASM" = auto ] && [ -z "$CONTIGS" ]; then [ -n "$R2" ] && ASM=metaspades || ASM=megahit; fi
 [ "$QC" = auto ] && QC=0    # 2026-09-27: MEGAHIT without QC matched native single-end assemblies exactly (8.8/8.8 Mb, GE 24.5/24.5); QC is off by default for both layouts
 [ "$EC" = auto ] && { [ "$ASM" = metaspades ] && EC=1 || EC=0; }
-HERE=$(cd "$(dirname "$0")" && pwd); PY=${REFMB_PY:-python3}; EMPY=${EMAPPER_PY:-python2}   # eggNOG-mapper 2.0.0 as vendored by pipeline v5 is Python 2
+HERE=$(cd "$(dirname "$0")" && pwd); PY=${CHECKGM_PY:-python3}; EMPY=${EMAPPER_PY:-python2}   # eggNOG-mapper 2.0.0 as vendored by pipeline v5 is Python 2
 mkdir -p "$OUT"; cd "$OUT"; LOG="$OUT/tierA.log"; step() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
 # a database file missing from a node-local cache falls back to the shared copy (a job's cache list can be older than its workflow snapshot)
 pick() { if [ -e "$DBS/$1" ]; then echo "$DBS/$1"; else echo "${DBS_FALLBACK:-$DBS}/$1"; fi; }
@@ -90,6 +90,6 @@ if ! DONE emapper; then step "eggNOG-mapper"
   $EMPY "$HERE/emapper2/emapper.py" -i CDS.faa -m diamond --no_annot --no_file_comments --cpu "$THREADS" --data_dir "$DBS" --dmnd_db "$DBS/eggnog_proteins.dmnd" -o emapper --override >> "$LOG" 2>&1
   $EMPY "$HERE/emapper2/emapper.py" --annotate_hits_table emapper.emapper.seed_orthologs --no_file_comments --cpu "$THREADS" --data_dir "$DBS" -o emapper --override >> "$LOG" 2>&1; STAMP emapper; fi
 # 9. query directory -------------------------------------------------------------------------------------------------
-REFMB_ASSEMBLER="$([ "$ASM" = metaspades ] && echo "metaSPAdes 3.15.3" || echo "MEGAHIT 1.2.9")" $PY "$HERE/pv5_to_query.py" build --sample "$SAMPLE" --contigs contigs.fasta --cds CDS.faa --diamond diamond.tsv --emapper emapper.emapper.annotations \
+CHECKGM_ASSEMBLER="$([ "$ASM" = metaspades ] && echo "metaSPAdes 3.15.3" || echo "MEGAHIT 1.2.9")" $PY "$HERE/pv5_to_query.py" build --sample "$SAMPLE" --contigs contigs.fasta --cds CDS.faa --diamond diamond.tsv --emapper emapper.emapper.annotations \
    $( [ -f ips.tsv ] && echo --ips ips.tsv ) --kofam-best kofam_best.tsv --kegg kegg.summary.kegg_pathways.tsv --out "$OUT/query" >> "$LOG" 2>&1
 step "done -> $OUT/query"
