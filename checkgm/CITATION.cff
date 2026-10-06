@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use checkgm, please cite the paper below (details to be announced)."
-title: "checkgm: a healthy-adult reference baseline for gut metagenome analysis"
+title: "checkgm: an adult reference baseline for gut metagenome analysis"
 version: 0.8.2
 license: MIT
 repository-code: "https://github.com/khoa-yelo/Meta2"
@@ -10,7 +10,7 @@ authors:
     affiliation: "[TBD]"
 preferred-citation:
   type: conference-paper
-  title: "[TBD] checkgm: gut metagenome pipelines shipped with healthy reference baselines"
+  title: "[TBD] checkgm: gut metagenome pipelines shipped with their own reference baselines"
   authors:
     - family-names: "[TBD]"
       given-names: "[TBD]"

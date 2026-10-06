@@ -82,7 +82,7 @@ Read-based bundles:
 
 | file | content |
 |---|---|
-| `rules.json` | depth bands, CLR delta, family mapped-fraction floor (0.9), basis sizes (254 species, 119 genera, 49 families), held-out healthy studies |
+| `rules.json` | depth bands, CLR delta, family mapped-fraction floor (0.9), basis sizes (254 species, 119 genera, 49 families), held-out reference studies |
 | `rules_function.json` | the same for the HUMAnN layers (4,518 KO, 423 pathways) and the KO regrouping rule |
 | `clr_basis_<species|genus|family|ko_humann|pathway_humann>.txt` | basis feature lists |
 | `species_taxid_map.tsv` | `species_name` (MetaPhlAn 3 `s__` name), `species`, `genus`, `family` taxids as the reference placed them |
@@ -98,7 +98,7 @@ and why (`CASE_CONTROL_STUDY`, `HELD_OUT`, `LOW_MAPPED_FRACTION`, `OUT_OF_STRATU
 ## Pool accession lists (distributed beside the bundles)
 
 Each released baseline comes with a tab-separated list of the public samples in its pool, and each pipeline with the list
-of the held-out healthy cohorts: `pool_<bundle_id>.tsv` and `heldout_healthy_<bundle series>.tsv`. Assembly-based lists
+of the held-out reference cohorts: `pool_<bundle_id>.tsv` and `heldout_healthy_<bundle series>.tsv`. Assembly-based lists
 carry `study` (BioProject), `mgnify_analysis` (MGYA), `mgnify_assembly` (ERZ), `ena_runs`, `sample_accession`, `biosample`
 and `band`; read-based lists carry `study` (curatedMetagenomicData 3 study), `cmd3_sample_id`, `ncbi_accession` (where
 cMD3 records one) and `band`. They hold identifiers only. The lists are not in the code repository; their sizes and

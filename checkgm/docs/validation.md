@@ -4,7 +4,7 @@ The reports in `docs/reports/` are verbatim copies of the result files the numbe
 This page says what each one tested and where its headline numbers are. Because the copies are verbatim, they still carry
 the development workspace's internal labels: S6 = the held-out calibration check (section 2), S7 = the excess-test survey over
 8,742 MGnify gut analyses (`assembly_all_gut_analyses_scoring.md`), S8 = the case/control evaluation (section 4), S11 = the
-reproduction from raw reads (section 1), S12 and S14 = the healthy strata and the disease atlas (sections 3 and 4), "anchors"
+reproduction from raw reads (section 1), S12 and S14 = the reference strata and the disease atlas (sections 3 and 4), "anchors"
 = samples measured by both pipelines, and "tier A" / "tier B" = the assembly-based / read-based pipeline.
 
 ## 1. Does the pipeline reproduce the reference measurement from raw reads?
@@ -23,7 +23,7 @@ A baseline is only usable if a new sample can be measured the same way the pool 
   same depth band. One further sample was set aside because the deposited run has less than half the reads cMD3 reports.
   The HUMAnN 3 function layers were **not** re-run from raw reads; their fidelity is unverified.
 
-## 2. Do healthy samples that were never in the pool fit the baseline?
+## 2. Do reference samples that were never in the pool fit the baseline?
 
 Expectation: about 5 % of features outside the 2.5–97.5 percentile band; the gate used during development was 8 % per study.
 
@@ -52,16 +52,16 @@ One fact about the pool composition is not a leakage question and remains: 342 o
 171 mirrored pairs, so the pool holds **6,323 distinct specimens**, and those 171 donors carry twice the weight of the
 rest. Two MetaCardis_2020_a pool samples have no row in the cMD3 metadata table and cannot be audited either way.
 
-- **Assembly** — `reports/assembly_heldout_calibration_check.md` (three held-out healthy studies, 233 samples; per layer and
+- **Assembly** — `reports/assembly_heldout_calibration_check.md` (three held-out reference studies, 233 samples; per layer and
   study the mean fraction outside and whether it passes) and `reports/assembly_loso_within_pool.md` (each pool study scored
   against a reference rebuilt without it: medians 0.05–0.055 on all layers except module; 73–85 % of studies within 8 %).
   Cohorts from Africa do not fit (19.8 % of families outside), and location cannot be separated from study.
-- **Reads** — `reports/reads_calibration_and_evaluation.md` (three held-out healthy studies and in-pool leave-one-study-out,
+- **Reads** — `reports/reads_calibration_and_evaluation.md` (three held-out reference studies and in-pool leave-one-study-out,
   all five layers).
 
-## 3. Does the healthy baseline move with age, sex, BMI or region?
+## 3. Does the reference baseline move with age, sex, BMI or region?
 
-`reports/assembly_healthy_strata.md` and `reports/reads_healthy_strata.md`: out-of-sample scores of healthy samples by age
+`reports/assembly_healthy_strata.md` and `reports/reads_healthy_strata.md`: out-of-sample scores of reference samples by age
 bin, sex, BMI class and region, with the median fraction outside, the share of samples over the gate, the share with a
 significant excess and the landscape distance. Region effects are confounded with study.
 
@@ -83,7 +83,7 @@ and controls flagged by the sample-level excess test, the median fraction outsid
 `reports/assembly_known_biology.md` tests 43 directions expected from the literature (case versus same-study control
 percentile shifts) on the assembly-based pipeline; 14 are confirmed. `reports/assembly_all_gut_analyses_scoring.md` scores
 all 8,742 gut analyses of the inventory against the standard assembly-based baseline and tabulates the fraction outside
-by health label (healthy samples included in the pool are scored in-sample there). `reports/assembly_disease_by_stratum.md`
+by health label (reference samples included in the pool are scored in-sample there). `reports/assembly_disease_by_stratum.md`
 and `reports/reads_disease_by_stratum.md` repeat the case/control comparison within age, sex, BMI and location strata where
 a study has at least 10 cases and 10 controls, and tabulate the balance of cases and controls first.
 

@@ -6,7 +6,7 @@ part of the installable package (they depend on cluster storage holding the stag
 hold: the bundle builder (`checkgm.build_reference.build`), the configuration files with every threshold and seed
 (`docs/configs/`), the figure scripts (`scripts/viz2/` for the paper's five figures, `scripts/viz/` for the superseded
 set), and the validation reports (`docs/reports/`). The public accession lists of every pool sample and of the held-out
-healthy cohorts are distributed beside the bundles (README download table), so a pool can be re-staged from the
+reference cohorts are distributed beside the bundles (README download table), so a pool can be re-staged from the
 archives.
 
 One caveat about provenance has to be read before the stage tables below. The released assembly bundles were not
@@ -32,11 +32,11 @@ Stages, in order, with typical wall time when no new analyses need staging:
 | staging and per-analysis parsing | only new analysis ids | hours per ~1,000 new analyses | normalized long tables per analysis |
 | matrices | no | 15 min | per-layer long tables (`sample_id`, `feature_id`, `value`, `detect`) |
 | bundles (lenient, strict) | yes | 10 min each | `refs/gut-assembly-adult-global-v<V>-<lenient|strict>`, study bootstrap 500; the released v0.8 series came from `project/scripts/s5_build_reference.py`, not from the packaged builder (see the caveat above) |
-| held-out calibration check | yes | 10 min | fraction outside the band on held-out healthy cohorts (gate 8 % per study) |
+| held-out calibration check | yes | 10 min | fraction outside the band on held-out reference cohorts (gate 8 % per study) |
 | scoring of all gut analyses | labels only | 1–2 h | out-of-sample scores for every candidate |
 | leave-one-study-out fold bundles and evaluation | yes | 1–2 h | case/control AUROC with the held-out study's reference rebuilt without it |
 | packaging and round trip | no | 15 min | tarballs, sha256, re-score check |
-| strata and disease atlas | yes | 1–2 h | healthy baseline by age, sex, BMI, region; disease deviations |
+| strata and disease atlas | yes | 1–2 h | reference baseline by age, sex, BMI, region; disease deviations |
 | figures | no | 5 min | |
 
 A version bump writes new bundles beside the old ones; nothing is overwritten. Every stage writes a stamp keyed by the
@@ -54,7 +54,7 @@ Before trusting a rebuilt baseline:
 
 Inputs: the curatedMetagenomicData 3 MetaPhlAn 3 species profiles and metadata (Zenodo release of cMD3), and its HUMAnN 3
 tables for the function layers. Stages: parse the profiles → place species on the NCBI backbone and form the CLR tables
-(`checkgm.normalize_reads` rules) → build the bundle (`checkgm.build_reference.build`) → check held-out healthy studies
+(`checkgm.normalize_reads` rules) → build the bundle (`checkgm.build_reference.build`) → check held-out reference studies
 (CosteaPI_2017, XieH_2016, YeZ_2018 are never in the pool) → package. A refresh of cMD does not touch the assembly baseline.
 
 ## `checkgm.build_reference.build`
