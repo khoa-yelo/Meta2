@@ -9,7 +9,7 @@ description = "Score a human gut metagenome against a reference baseline of adul
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
-authors = [{ name = "[TBD]" }]
+authors = [{ name = "Khoa Hoang" }]
 keywords = ["metagenomics", "microbiome", "reference", "MetaPhlAn", "MGnify", "percentile"]
 classifiers = [
   "Programming Language :: Python :: 3",

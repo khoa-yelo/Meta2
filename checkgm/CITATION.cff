@@ -1,19 +1,21 @@
 cff-version: 1.2.0
-message: "If you use checkgm, please cite the paper below (details to be announced)."
+# The paper is not yet published: preferred-citation below names the venue it is intended for, so the year and any
+# page or DOI details will change on acceptance. Cite the repository until then.
+message: "If you use checkgm, please cite the paper below. It is not yet published, so cite this repository meanwhile."
 title: "checkgm: an adult reference baseline for gut metagenome analysis"
 version: 0.8.2
 license: MIT
 repository-code: "https://github.com/khoa-yelo/Meta2"
 authors:
-  - family-names: "[TBD]"
-    given-names: "[TBD]"
-    affiliation: "[TBD]"
+  - family-names: "Hoang"
+    given-names: "Khoa"
+    affiliation: "Stanford University"
 preferred-citation:
   type: conference-paper
-  title: "[TBD] checkgm: gut metagenome pipelines shipped with their own reference baselines"
+  title: "checkgm: gut metagenome pipelines shipped with their own reference baselines"
   authors:
-    - family-names: "[TBD]"
-      given-names: "[TBD]"
+    - family-names: "Hoang"
+      given-names: "Khoa"
   conference:
-    name: "[TBD] International Conference on Bioinformatics and Computational Biology (ICBCB 2027)"
+    name: "International Conference on Bioinformatics and Computational Biology (ICBCB 2027)"
   year: 2027

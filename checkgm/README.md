@@ -78,7 +78,7 @@ them. One rename matters: `score` now means the health score, and what `score` u
 
 Bundles, the assembly-based pipeline image and the baseline pool accession lists are too large for GitHub and are
 distributed beside it; a Zenodo deposit covering them and the container image `checkgm_tierA.sif` is prepared, and its
-DOI will be recorded here [TBD]. **That deposit is not public yet**, so until it is, the archives have to be requested
+DOI is reserved as `10.5281/zenodo.23181418` and will resolve once the record is public. **That deposit is not public yet**, so until it is, the archives have to be requested
 from the authors and given to `setup` directly:
 
 ```bash
@@ -273,7 +273,8 @@ donor cohort are held out together (`docs/validation.md` section 2).
 
 ## Citation
 
-Paper, authors and DOI to be announced [TBD]; see `CITATION.cff`. Until then please cite this repository.
+Khoa Hoang, Stanford University. The paper is not yet published; see `CITATION.cff` for the intended venue, and cite
+this repository meanwhile. The baselines and container image carry the reserved DOI `10.5281/zenodo.23181418`.
 
 ## Licence
 
