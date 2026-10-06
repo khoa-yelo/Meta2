@@ -71,6 +71,10 @@ rows = [("checkGM percentiles", base.percentiles), ("Raw abundances", base.raw_a
 for n, lab in [("GMHI", "GMHI (published)"), ("Shannon", "Alpha diversity"), ("GMWI2", "GMWI2 (published)")]:
     rows.append((lab, H[H["index"] == n].set_index("study").auroc_direct))
 HS = pd.read_csv(f"{P}/results/s16/health_score_B.tsv", sep="\t"); rows.append(("checkGM health score", HS[HS.feature_set == "pct+summary+presence"].set_index("study").auroc))
+# the same L1 model trained on raw CLR instead of percentiles, so the transformation is the only difference (s16 LAYERS=rawcmp)
+RC = f"{P}/results/s16/health_score_B_rawcmp.tsv"
+if os.path.exists(RC):
+    rows.append(("same score on raw abundances", pd.read_csv(RC, sep="\t").query("feature_set == 'raw+summary+presence'").set_index("study").auroc))
 # do gene families and pathways add anything? the same leave-one-study-out random forest on the function percentiles, and on
 # taxa + function together (results/s11/pipelineB_loso_auroc.tsv, written by s13)
 LF = pd.read_csv(f"{P}/results/s11/pipelineB_loso_auroc.tsv", sep="\t")

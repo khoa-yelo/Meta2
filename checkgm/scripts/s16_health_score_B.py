@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A supervised health-versus-disease score built on checkgm output (read pipeline), evaluated leave-one-study-out.
+"""A supervised health-versus-disease score built on refmb output (read pipeline), evaluated leave-one-study-out.
 
 Samples: all cMD3 adults of the read pipeline — baseline healthy adults (6,494), held-out healthy adults (317), and the cases
 and controls of the disease studies (label 1 = case). Features (per sample):
@@ -30,7 +30,7 @@ NJ = int(os.environ.get("SLURM_CPUS_PER_TASK", 8)); CS = [0.003, 0.01, 0.03, 0.1
 S = pd.read_csv(f"{P}/work/s11/pipeB/samples.tsv", sep="\t", low_memory=False)
 S = S[S.role.isin(["reference_pool", "heldout_healthy", "case_control"]) & S.status.isin(["included", "NOT_CONTROL"])].copy()
 S["y"] = S.condition.ne("control").astype(int)
-TRAIN = os.environ.get("TRAIN", "all"); LAY = os.environ.get("LAYERS", "tax")   # tax = taxonomy only (primary) | taxfun = also KO and pathway percentiles
+TRAIN = os.environ.get("TRAIN", "all"); LAY = os.environ.get("LAYERS", "tax")   # tax = taxonomy only (primary) | taxfun = also KO and pathway percentiles | rawcmp = percentiles vs raw CLR, same model
 SUF = ("" if TRAIN == "all" else f"_{TRAIN}") + ("" if LAY == "tax" else f"_{LAY}")
 if LAY == "taxfun":   # same sample set for every feature set, so that "with function" vs "without" is the only contrast
     _f = pd.read_parquet(f"{P}/work/s12/B/oos_summaries.parquet", columns=["sample", "layer"])
@@ -51,6 +51,14 @@ SUM = pd.concat([M.pivot_table(index="sample", columns="layer", values="frac_out
 sp = pd.read_parquet(f"{P}/work/s11/metaphlan/species_long.parquet"); sp = sp[sp.sample_key.isin(set(S.sample_key)) & (sp.rel_abundance > 1e-5)]
 PRES = pd.crosstab(sp.sample_key, sp.species).clip(upper=1).reindex(S.sample_key).fillna(0).add_prefix("present:")   # species kept per fold (>= 0.5 % of TRAINING samples)
 SETS = {"presence": [PRES], "pct": [PCT], "pct+summary": [PCT, SUM], "pct+summary+presence": [PCT, SUM, PRES]}
+if LAY == "rawcmp":   # the same model class on raw CLR instead of percentiles, so that the transformation is the only difference
+    XR = pd.read_parquet(f"{P}/work/s12/B/oos_scores.parquet", columns=["sample", "layer", "feature_id", "value"])
+    XR = XR[XR.layer.str.startswith("taxonomy") & XR["sample"].isin(set(S.sample_key))]
+    XR["feature"] = XR.layer.str.replace("taxonomy_", "") + ":" + XR.feature_id.astype(str)
+    RAW = XR.pivot_table(index="sample", columns="feature", values="value", aggfunc="first").reindex(S.sample_key).fillna(0.0).astype(np.float32)
+    del XR
+    SETS = {"pct": [PCT], "raw": [RAW], "pct+summary+presence": [PCT, SUM, PRES], "raw+summary+presence": [RAW, SUM, PRES]}
+    print(f"raw CLR features: {RAW.shape[1]}", flush=True)
 if LAY == "taxfun":
     F = pd.read_parquet(f"{P}/work/s12/B/oos_scores.parquet", columns=["sample", "layer", "feature_id", "percentile"],
                         filters=[("layer", "in", ["ko_humann", "pathway_humann"])])
@@ -112,11 +120,11 @@ for name, g in R.groupby("feature_set", sort=False):
                      "wilcoxon_p_vs_gmwi2": wilcoxon(d).pvalue if len(h) >= 6 else np.nan, "median_nonzero_features": h.n_nonzero.median()})
 Sm = pd.DataFrame(summ)
 # final model on all samples, best feature set, C by grouped CV, for the coefficient table
-best = "pct+summary+presence" if LAY == "tax" else "pct+summary+presence+function"   # primary model, fixed before results (configs/decisions.yaml health_score_prespec)
+best = "pct+summary+presence" if LAY in ("tax", "rawcmp") else "pct+summary+presence+function"   # primary model, fixed before results (configs/decisions.yaml health_score_prespec)
 Xb = pd.concat(SETS[best], axis=1); Xb = Xb[[c for c in Xb.columns if not c.startswith("present:") or Xb[c].mean() >= 0.005]]; cv = {C: np.mean([roc_auc_score(y[b], model(C).fit(Xb.values[a], y[a]).decision_function(Xb.values[b])) for a, b in GroupKFold(5).split(Xb, y, grp)]) for C in CS}
 mf = model(max(cv, key=cv.get)).fit(Xb.values, y); coef = pd.Series(mf[-1].coef_[0], index=Xb.columns); coef = coef[coef != 0].sort_values()
 coef.rename("coefficient").to_csv(f"{OUT}/health_score_B{SUF}_coefficients.tsv", sep="\t")
-L = [f"# Supervised health-vs-disease score on checkgm output (read pipeline), leave one study out; training studies: {TRAIN}; layers: {LAY}\n",
+L = [f"# Supervised health-vs-disease score on refmb output (read pipeline), leave one study out; training studies: {TRAIN}; layers: {LAY}\n",
      f"{len(S):,} samples ({y.sum():,} cases) from {len(set(st))} studies; evaluated on the 14 case/control studies, each scored by a model trained without it. GMWI2 is scored as published (its training set includes 10 of the 14 studies).\n",
      Sm.round(3).to_markdown(index=False), f"\nFinal model ({best}, all samples): {len(coef)} non-zero features (results/s16/health_score_B_coefficients.tsv).\n",
      "## Per study\n", R.round(3).to_markdown(index=False), f"\nWall {time.time()-t0:.0f}s."]

@@ -243,7 +243,8 @@ fig3 <- function() {
   au$method <- recode(au$method, "GMHI (genus approx.)" = "GMHI, genus approx.", "GMHI (published)" = "GMHI", "GMWI2 (published)" = "GMWI2",
                       "Alpha diversity" = "alpha diversity", "Raw abundances" = "raw abundances",
                       "checkGM health score" = "health score", "checkGM percentiles" = "percentiles, taxa",
-                      "checkGM percentiles, genes only" = "percentiles, genes", "checkGM percentiles, taxa + genes" = "percentiles, both")
+                      "checkGM percentiles, genes only" = "percentiles, genes", "checkGM percentiles, taxa + genes" = "percentiles, both",
+                      "same score on raw abundances" = "same score, raw input")
   lv <- c("assembly pipeline\n11 studies", "read pipeline\n14 studies", "read pipeline\n4 studies GMWI2 never saw")
   au$pipeline <- factor(recode(au$pipeline, "Assembly pipeline (11 studies)" = lv[1], "Read pipeline (14 studies)" = lv[2],
                                "Read pipeline, 4 studies GMWI2 never saw" = lv[3]), lv)
