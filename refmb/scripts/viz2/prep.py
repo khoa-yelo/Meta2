@@ -71,7 +71,12 @@ rows = [("refmb percentiles", base.percentiles), ("Raw abundances", base.raw_abu
 for n, lab in [("GMHI", "GMHI (published)"), ("Shannon", "Alpha diversity"), ("GMWI2", "GMWI2 (published)")]:
     rows.append((lab, H[H["index"] == n].set_index("study").auroc_direct))
 HS = pd.read_csv(f"{P}/results/s16/health_score_B.tsv", sep="\t"); rows.append(("refmb health score", HS[HS.feature_set == "pct+summary+presence"].set_index("study").auroc))
-fb = pd.concat([pd.DataFrame({"method": lab, "study": s_.index, "auroc": s_.values}) for lab, s_ in rows]); fb["unseen"] = ~fb.study.map(base.in_gmwi2_training).astype(bool)
+# do gene families and pathways add anything? the same leave-one-study-out random forest on the function percentiles, and on
+# taxa + function together (results/s11/pipelineB_loso_auroc.tsv, written by s13)
+LF = pd.read_csv(f"{P}/results/s11/pipelineB_loso_auroc.tsv", sep="\t")
+LF = LF[(LF.training == "all_studies") & (LF.features == "reference_relative")]
+for fs, lab in [("function", "refmb percentiles, genes only"), ("all", "refmb percentiles, taxa + genes")]:
+    rows.append((lab, LF[LF.feature_set == fs].set_index("study").auroc))
 f3 = pd.concat([fa, fb.assign(pipeline="Read pipeline (14 studies)"), fb[fb.unseen].assign(pipeline="Read pipeline, 4 studies GMWI2 never saw")])
 f3.to_csv(f"{OUT}/f3_auroc.csv", index=False)
 
@@ -132,3 +137,43 @@ dlow = (w["low"]["cases"] + w["expected_but_missing"]["cases"]) - (w["low"]["con
 pick = list(dlow.sort_values().tail(8).index) + list(dhigh.sort_values().tail(4).index)
 t[t.name.isin(pick)].assign(n_group=lambda d: d.group.map(ng), side=lambda d: np.where(d.name.isin(dhigh.sort_values().tail(4).index), "gained", "lost")).to_csv(f"{OUT}/f4_cdi_calls.csv", index=False)
 print("cdi picks", pick, ng.to_dict())
+
+# ---- Fig 4c: the gene families and pathways that shift in several colorectal cancer cohorts (read pipeline). MetaCyc names
+# come from the HUMAnN tables themselves ("PWY-xxxx: name"); KO names from HUMAnN's map_ko_name.
+import glob, gzip
+PNAME = {}
+for f_ in sorted(glob.glob(f"{P}/staging/cmd3_humann/pathway_abundance/*.parquet"))[:4]:
+    for v in pd.read_parquet(f_, columns=["feature_id"]).feature_id.unique():
+        if ":" in str(v):
+            PNAME.setdefault(str(v).split(":")[0].strip(), str(v).split(":", 1)[1].strip())
+KNAME = {}
+with gzip.open(f"{P}/staging/cmd3_humann/mapping/map_ko_name.txt.gz", "rt") as fh:
+    for line in fh:
+        q = line.rstrip("\n").split("\t"); KNAME[q[0]] = q[1] if len(q) > 1 else q[0]
+Cf = pd.read_csv(f"{P}/results/s12/disease_atlas_B_consistent.tsv", sep="\t", dtype={"feature_id": str})
+Cf = Cf[(Cf.condition == "CRC") & Cf.layer.str.endswith("_humann")]
+Ff = pd.read_csv(f"{P}/results/s12/disease_atlas_B_features.tsv", sep="\t", dtype={"feature_id": str})
+Ff = Ff[(Ff.condition == "CRC") & Ff.layer.str.endswith("_humann")].merge(Cf[["layer", "feature_id", "n_studies", "median_shift"]], on=["layer", "feature_id"])
+pick = []
+for lay, n_min, k in [("pathway_humann", 3, 7), ("ko_humann", 2, 5)]:   # pathways replicate more widely than single KOs
+    g = Cf[(Cf.layer == lay) & (Cf.n_studies >= n_min)].copy()
+    pick += list(g.reindex(g.median_shift.abs().sort_values(ascending=False).index).head(k).feature_id)
+Ff = Ff[Ff.feature_id.isin(pick)].copy()
+Ff["name"] = [PNAME.get(f_, f_) if lay == "pathway_humann" else KNAME.get(f_, f_) for f_, lay in zip(Ff.feature_id, Ff.layer)]
+Ff["rank"] = Ff.layer.map({"pathway_humann": "pathways", "ko_humann": "gene families"})
+Ff["sig"] = (Ff.q <= 0.05) & (Ff["shift"].abs() >= 10)
+Ff[["study", "rank", "name", "shift", "sig", "n_studies", "median_shift"]].to_csv(f"{OUT}/f4_crc_function.csv", index=False)
+
+# ---- Fig 5c: the gene families that place Hadza samples outside the range (assembly pipeline, KOs carried by most healthy adults)
+rk = pd.read_parquet(f"{B}/features/ko_eggnog.parquet").set_index("feature_id")
+pvk = rk[[c for c in rk.columns if c.startswith("prevalence_band_")]].max(axis=1); commonk = set(pvk.index[pvk >= 0.9].astype(str))
+K = pd.read_parquet(f"{P}/work/s12/A/oos_scores.parquet", columns=["sample", "feature_id", "call"], filters=[("layer", "==", "ko_eggnog")])
+K = K[K["sample"].isin(set(SA["sample"])) & K.feature_id.astype(str).isin(commonk)]
+K["group"] = K["sample"].map(SA.drop_duplicates("sample").set_index("sample").group)
+aggk = K.assign(low=K.call == "low", high=K.call == "high", missing=K.call == "expected_but_missing").groupby(["group", "feature_id"])[["low", "high", "missing"]].sum()
+aggk = aggk.div(n_by, level="group", axis=0).reset_index(); aggk["name"] = aggk.feature_id.astype(str).map(lambda k_: KNAME.get(k_, k_))
+aggk = aggk[~aggk.name.str.contains("uncharacterized|hypothetical", case=False)]   # unnamed orthologs carry no readable label
+hk = aggk[aggk.group == "Hadza (Tanzania)"].assign(score=lambda d: d.high - d.low - d.missing).set_index("feature_id")
+topk = list(hk.sort_values("score").tail(4).index) + list(hk.sort_values("score").head(3).index)
+aggk[aggk.feature_id.isin(topk)].assign(direction=lambda d: np.where(d.feature_id.isin(hk.sort_values("score").tail(4).index), "above", "below")).to_csv(f"{OUT}/f5_ko.csv", index=False)
+print("function panels written")

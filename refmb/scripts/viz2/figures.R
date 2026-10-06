@@ -95,13 +95,16 @@ fig1 <- function() {
     box(3.2, 4.88, 0.08, 0.47, "scored against healthy adults", "6,494 adults, 19 studies;\nstatistics only, no samples", NEUT_BG, PB) +
     seg(4.9, 0.755, 4.99, 0.755) + seg(4.9, 0.275, 4.99, 0.275) + seg(4.99, 0.275, 4.99, 0.755) + arr(4.99, 0.515, 5.11, 0.515) +
     geom_polygon(data = rr(5.12, 7.13, 0.08, 0.95), aes(x, y), fill = "white", colour = INK2, linewidth = 0.35) +
-    annotate("text", 5.21, 0.885, label = "report for every feature", size = pt(6.8), fontface = "bold", family = FONT, colour = INK, hjust = 0, vjust = 1)
-  rows <- data.frame(y = c(0.63, 0.46, 0.29), lab = c("Oscillospiraceae", "Streptococcaceae", "lysine racemase"), s = c(6.03, 6.33, 6.74),
+    annotate("text", 5.21, 0.925, label = "report for every feature", size = pt(6.8), fontface = "bold", family = FONT, colour = INK, hjust = 0, vjust = 1)
+  rows <- data.frame(y = c(0.665, 0.535, 0.27), lab = c("Oscillospiraceae", "Streptococcaceae", "lysine racemase"), s = c(6.03, 6.33, 6.74),
                      col = c(LOW, WITHIN, HIGH), call = c("low", "within", "high"))
+  a <- a + annotate("segment", x = 5.21, xend = 7.04, y = 0.425, yend = 0.425, colour = GRID, linewidth = 0.5) +
+    annotate("text", 5.21, 0.765, label = "taxa", hjust = 0, size = pt(5.8), family = FONT, colour = MUTED, fontface = "italic") +
+    annotate("text", 5.21, 0.36, label = "genes and pathways", hjust = 0, size = pt(5.8), family = FONT, colour = MUTED, fontface = "italic")
   for (i in 1:3) a <- a + range_row(6.1, 6.65, rows$y[i], 6.1, 6.27, 6.47, 6.65, 6.37, rows$s[i], rows$col[i]) +
     annotate("text", 5.21, rows$y[i], label = rows$lab[i], hjust = 0, size = pt(6.2), family = FONT, colour = INK2) +
     annotate("text", 6.83, rows$y[i], label = rows$call[i], hjust = 0, size = pt(6.2), family = FONT, colour = rows$col[i], fontface = "bold")
-  a <- a + annotate("text", 6.375, 0.135, label = "healthy range", size = pt(5.8), family = FONT, colour = MUTED, vjust = 0)
+  a <- a + annotate("text", 6.375, 0.125, label = "healthy range", size = pt(5.8), family = FONT, colour = MUTED, vjust = 0)
 
   # b: how one feature is placed
   m <- jnum(file.path(D, "f1_density_meta.json")); dz <- read_csv(file.path(D, "f1_density.csv"))
@@ -125,12 +128,14 @@ fig1 <- function() {
   r <- read_csv(file.path(D, "f1_report.csv")) %>% mutate(call = ifelse(is.na(x), "absent", call))
   r$label <- sub("^lysine racemase.*", "lysine racemase (K20707)", r$label); r$label <- sub("^ECF sigma.*", "ECF sigma factor (K03088)", r$label)
   r <- r %>% mutate(txt = ifelse(call == "absent", "absent; carried by most healthy adults", paste0(fold_lab(x), " · ", pct_lab(pct))),
-                    layer = factor(ifelse(layer == "Families", "families", "genes"), c("families", "genes")),
+                    layer = factor(ifelse(layer == "Families", "taxa", "genes"), c("taxa", "genes")),
                     across(c(lo99, lo, q1, q3, hi, hi99), cl))
-  fam <- r$layer == "families" & r$call != "absent"; gen <- r$layer == "genes"
+  fam <- grepl("^taxa", r$layer) & r$call != "absent"; gen <- grepl("^genes", r$layer)
   ordr <- c(r$label[fam][order(r$x[fam])], r$label[r$call == "absent"], r$label[gen][order(r$x[gen])])
   r$label <- factor(r$label, rev(ordr))
   c_ <- ggplot(r, aes(y = label)) +
+    geom_rect(data = filter(r, grepl("^genes", layer)) %>% distinct(layer), inherit.aes = FALSE,
+              aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "#F6F4EF") +
     geom_segment(aes(x = lo99, xend = hi99, yend = label), colour = AXIS, linewidth = 0.3) +
     geom_tile(aes(x = (lo + hi) / 2, width = hi - lo), height = 0.62, fill = BAND) +
     geom_tile(aes(x = (q1 + q3) / 2, width = q3 - q1), height = 0.62, fill = IQR) +
@@ -144,12 +149,13 @@ fig1 <- function() {
     coord_cartesian(xlim = XL, clip = "off") +
     labs(x = "relative to the typical healthy adult (median)", y = NULL,
          title = expression(bold("report for one ") * bolditalic("C. difficile") * bold(" infection patient (excerpt)"))) +
-    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5), strip.placement = "outside",
-          strip.text.y.left = element_text(angle = 90, hjust = 0.5, size = 6.2, face = "plain", colour = MUTED), panel.spacing.y = unit(4, "pt"),
+    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5),
+          strip.placement = "outside", strip.text.y.left = element_text(angle = 90, hjust = 0.5, size = 6.2, face = "bold", colour = INK2),
+          panel.spacing.y = unit(5, "pt"),
           plot.margin = margin(2, 122, 2, 2))
-  p <- wrap_elements(full = a) / ((b | c_) + plot_layout(widths = c(1, 1.32))) + plot_layout(heights = c(1.02, 1.62)) + plot_annotation(tag_levels = "a") &
+  p <- wrap_elements(full = a) / ((b | c_) + plot_layout(widths = c(1, 1.32))) + plot_layout(heights = c(1.02, 1.50)) + plot_annotation(tag_levels = "a") &
     theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig1", DOUBLE, 2.62)
+  save_fig(p, "fig1", DOUBLE, 2.50)
 }
 
 # ======================================================================================== Figure 2: pipelines, curation, checks
@@ -170,7 +176,7 @@ fig2 <- function() {
     box(5.4, 6.38, 0.58, 0.96, "features", "families, genera,\nKOs, Pfam, modules", PA_BG, PA) +
     box(5.4, 6.38, 0.08, 0.46, "features", "families, genera,\nspecies, KOs, pathways", PB_BG, PB) +
     seg(6.39, 0.77, 6.45, 0.77) + seg(6.39, 0.27, 6.45, 0.27) + seg(6.45, 0.27, 6.45, 0.77) + arr(6.45, 0.52, 6.51, 0.52) +
-    box(6.52, 7.14, 0.08, 0.96, "score", "normalize;\nplace each\nfeature in\nthe healthy\nrange", NEUT_BG, INK2, ts = 6.6, ss = 6.0)
+    box(6.52, 7.14, 0.08, 0.96, "score", "normalize;\nplace each\nfeature in\nthe range", NEUT_BG, INK2, ts = 6.6, ss = 6.0)
 
   # b: curation, from public resource to baseline and evaluation sets
   fu <- read_csv(file.path(D, "f2_funnel.csv"))
@@ -226,15 +232,18 @@ fig2 <- function() {
     scale_x_continuous(limits = c(0.4, 1.0), breaks = c(0.4, 0.6, 0.8, 1.0), expand = c(0, 0.01)) +
     labs(x = "Spearman ρ with source percentiles", y = NULL, title = "reproduced from raw reads") +
     theme(panel.grid.major.y = element_blank(), strip.text = element_text(size = 6.5, face = "plain", colour = INK2))
-  p <- wrap_elements(full = a) / (b | c_ | d) + plot_layout(heights = c(1.06, 2.32)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig2", DOUBLE, 3.04)
+  p <- wrap_elements(full = a) / (b | c_ | d) + plot_layout(heights = c(1.06, 2.45)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
+  save_fig(p, "fig2", DOUBLE, 2.9)
 }
 
 # ======================================================================================== Figure 3: disease benchmark
 fig3 <- function() {
   au <- read_csv(file.path(D, "f3_auroc.csv"))
-  au$method <- recode(au$method, "GMHI (genus approx.)" = "GMHI, genus approx.", "GMHI (published)" = "GMHI", "GMWI2 (published)" = "GMWI2", "Alpha diversity" = "alpha diversity", "Raw abundances" = "raw abundances")
-  lv <- c("assembly pipeline, 11 studies", "read pipeline, 14 studies", "read pipeline, the 4 studies GMWI2 was not trained on")
+  au$method <- recode(au$method, "GMHI (genus approx.)" = "GMHI, genus approx.", "GMHI (published)" = "GMHI", "GMWI2 (published)" = "GMWI2",
+                      "Alpha diversity" = "alpha diversity", "Raw abundances" = "raw abundances",
+                      "refmb percentiles" = "refmb percentiles, taxa", "refmb percentiles, genes only" = "refmb percentiles, genes",
+                      "refmb percentiles, taxa + genes" = "refmb percentiles, taxa + genes")
+  lv <- c("assembly pipeline, 11 studies", "read pipeline, 14 studies", "read pipeline, the 4 GMWI2 never saw")
   au$pipeline <- factor(recode(au$pipeline, "Assembly pipeline (11 studies)" = lv[1], "Read pipeline (14 studies)" = lv[2], "Read pipeline, 4 studies GMWI2 never saw" = lv[3]), lv)
   s <- au %>% group_by(pipeline, method) %>% summarise(m = mean(auroc), n = n()) %>% ungroup() %>%
     mutate(lab = ifelse(method == "GMWI2" & pipeline == lv[2], "GMWI2†", method), key = paste(pipeline, method),
@@ -244,7 +253,7 @@ fig3 <- function() {
   g <- ggplot(s, aes(y = key)) + geom_vline(xintercept = 0.5, colour = MUTED, linewidth = 0.35) +
     geom_tile(aes(x = (0.5 + m) / 2, width = abs(m - 0.5), fill = grp), height = 0.7) +
     geom_point(data = au, aes(x = auroc), position = position_jitter(height = 0.17, width = 0, seed = 2), size = 0.6, colour = INK, alpha = 0.5, stroke = 0) +
-    geom_text(aes(x = 1.075, label = sprintf("%.2f", m), fontface = ifelse(grp == "refmb", "bold", "plain")), hjust = 1, size = pt(6.4), family = FONT, colour = INK) +
+    geom_text(aes(x = 1.075, label = sprintf("%.2f", m), fontface = ifelse(grp == "refmb", "bold", "plain")), hjust = 1, size = pt(6.2), family = FONT, colour = INK) +
     facet_wrap(~pipeline, ncol = 1, scales = "free_y") + scale_fill_manual(values = c(refmb = ACC, GMWI2 = GREY_D, other = GREY_L), guide = "none") +
     scale_y_discrete(labels = setNames(s$lab, s$key)) +
     scale_x_continuous(limits = c(0.25, 1.08), breaks = seq(0.3, 1.0, 0.1), labels = c("0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0"), expand = c(0, 0)) +
@@ -253,8 +262,8 @@ fig3 <- function() {
           axis.text.y = element_text(size = 6.5, colour = INK), panel.spacing.y = unit(4, "pt"))
   gt <- ggplot_gtable(ggplot_build(g))                                     # facet heights proportional to the number of bars
   rows <- gt$layout$t[grepl("panel", gt$layout$name)]; gt$heights[rows] <- unit(as.numeric(table(s$pipeline)), "null")
-  ggsave(file.path(OUT, "fig3.pdf"), gt, width = SINGLE, height = 2.62, units = "in", device = cairo_pdf)
-  ggsave(file.path(OUT, "fig3.png"), gt, width = SINGLE, height = 2.62, units = "in", dpi = 300, device = ragg::agg_png, bg = "white"); message("wrote fig3")
+  ggsave(file.path(OUT, "fig3.pdf"), gt, width = SINGLE, height = 3.1, units = "in", device = cairo_pdf)
+  ggsave(file.path(OUT, "fig3.png"), gt, width = SINGLE, height = 3.1, units = "in", dpi = 300, device = ragg::agg_png, bg = "white"); message("wrote fig3")
 }
 
 # ---- "share outside the range" bars shared by Figs 4a and 5b: every bar grows rightward from zero and the panel is split by
@@ -288,12 +297,32 @@ fig4 <- function() {
           legend.justification = "center", strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5),
           panel.spacing.y = unit(5, "pt"), axis.text.y = element_text(colour = INK, size = 6.5), panel.grid.major.y = element_blank())
 
-  cr <- read_csv(file.path(D, "f4_crc.csv")) %>% filter(rank != "Species") %>% mutate(cohort = cohort_lab(study))
-  ordt <- cr %>% distinct(rank, name, median_shift) %>% arrange(rank, desc(median_shift))
-  gen <- unique(cr$name[cr$rank == "Genus"])
-  cr$name <- factor(cr$name, ordt$name); cr$rank <- factor(ifelse(cr$rank == "Family", "families", "genera"), c("families", "genera"))
+  short <- function(x) {                                    # keep the long MetaCyc and KO names readable at 6 pt
+    x <- sub(" \\[EC:[^]]*\\]$", "", x)
+    x <- sub("^two-component system, chemotaxis family, protein-glutamate.*", "chemotaxis methylesterase (CheB)", x)
+    x <- sub("^energy-coupling factor transport system.*", "energy-coupling factor transporter", x)
+    x <- sub("^ATP phosphoribosyltransferase regulatory subunit$", "ATP phosphoribosyltransferase (reg.)", x)
+    x <- sub("^thiamin formation from pyrithiamine and oxythiamine \\(yeast\\)$", "thiamin formation", x)
+    x <- sub("^myo-, chiro- and scillo-inositol degradation$", "inositol degradation", x)
+    x <- sub("^pyruvate fermentation to acetate and lactate II$", "pyruvate fermentation to acetate", x)
+    x <- sub("^pentose phosphate pathway \\(non-oxidative branch\\)$", "pentose phosphate (non-oxidative)", x)
+    x <- sub("^methylerythritol phosphate pathway II$", "methylerythritol phosphate pathway", x)
+    x
+  }
+  keep_n <- c(Family = 4, Genus = 5)                        # room for the function rows; the full lists are in the atlas tables
+  cr <- read_csv(file.path(D, "f4_crc.csv")) %>% filter(rank != "Species")
+  topt <- cr %>% distinct(rank, name, median_shift) %>% group_by(rank) %>% slice_min(median_shift, n = 5) %>% ungroup() %>%
+    filter(rank != "Family" | name %in% (cr %>% distinct(rank, name, median_shift) %>% filter(rank == "Family") %>% slice_min(median_shift, n = 4) %>% pull(name)))
+  cr <- filter(cr, name %in% topt$name)
+  fn <- read_csv(file.path(D, "f4_crc_function.csv")) %>% mutate(name = short(name)) %>%
+    group_by(rank) %>% filter(name %in% (distinct(., name, median_shift) %>% slice_min(median_shift, n = 4) %>% pull(name))) %>% ungroup()
+  cr <- bind_rows(cr %>% mutate(rank = ifelse(rank == "Family", "families", "genera")),
+                  fn %>% mutate(rank = ifelse(rank == "gene families", "genes", rank))) %>% mutate(cohort = cohort_lab(study))
+  ital <- cr$name[cr$rank == "genera"]
+  ordt <- cr %>% distinct(rank, name, median_shift) %>% mutate(rank = factor(rank, c("families", "genera", "pathways", "genes"))) %>% arrange(rank, desc(median_shift))
+  cr$name <- factor(cr$name, ordt$name); cr$rank <- factor(cr$rank, c("families", "genera", "pathways", "genes"))
   cr$cohort <- factor(cr$cohort, sort(unique(cr$cohort)))
-  ylab_it <- function(br) as.expression(lapply(br, function(n) if (n %in% gen) bquote(italic(.(n))) else bquote(.(n))))
+  ylab_it <- function(br) as.expression(lapply(br, function(n) if (n %in% ital) bquote(italic(.(n))) else bquote(.(n))))
   sg <- filter(cr, sig)
   b <- ggplot(cr, aes(x = cohort, y = name, fill = shift)) + geom_tile(colour = "white", linewidth = 0.5) +
     geom_point(data = sg, size = 0.75, colour = ifelse(abs(sg$shift) > 30, "white", INK)) +
@@ -305,9 +334,10 @@ fig4 <- function() {
     guides(fill = guide_colourbar(barwidth = unit(4.5, "pt"), barheight = unit(60, "pt"), ticks.colour = "white")) +
     theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1, size = 6.2, colour = INK), panel.grid.major = element_blank(), axis.line = element_blank(),
           axis.ticks = element_blank(), strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5),
-          axis.text.y = element_text(colour = INK, size = 6.5), legend.title = element_text(size = 6, colour = INK2), legend.position = "right")
-  p <- (a | b) + plot_layout(widths = c(1, 1.0)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig4", DOUBLE, 2.62)
+          axis.text.y = element_text(colour = INK, size = 6.2), legend.title = element_text(size = 6, colour = INK2), legend.position = "right",
+          panel.spacing.y = unit(2.5, "pt"))
+  p <- (a | b) + plot_layout(widths = c(0.86, 1.0)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
+  save_fig(p, "fig4", DOUBLE, 2.76)
 }
 
 # ======================================================================================== Figure 5: a population outside the range
@@ -331,29 +361,40 @@ fig5 <- function() {
   a <- a + geom_text(data = data.frame(layer = factor("bacterial families", levels(fr$layer)), g = factor(st[[3]], levels(fr$g))), inherit.aes = FALSE,
                      aes(x = 46.5, y = 3.62, label = "median"), hjust = 0, size = pt(6), colour = MUTED, family = FONT)
 
-  ge <- read_csv(file.path(D, "f5_genera.csv")) %>% mutate(name = sub(" \\(ex .*\\)$", "", name),
-    side = factor(ifelse(direction == "above", "above the range", "below or missing"), c("above the range", "below or missing")))
-  hz <- filter(ge, group == "Hadza (Tanzania)")
-  ordr <- c(hz %>% filter(direction == "below") %>% arrange(low + missing) %>% pull(name), hz %>% filter(direction == "above") %>% arrange(high) %>% pull(name))
-  bars <- call_bars(hz) %>% mutate(name = factor(name, ordr))
-  cmp <- ge %>% filter(group != "Hadza (Tanzania)") %>% mutate(x = ifelse(direction == "above", high, low + missing), name = factor(name, ordr),
-           who = factor(ifelse(group == "Other baseline studies", "other healthy adults", "US participants, same study"), c("US participants, same study", "other healthy adults")))
+  # b: genera and gene families together, so the panel shows both layers of the output. Bars grow from zero; colour carries the
+  # direction, so no half of the axis is left empty. Genera are italic, gene families roman.
+  rd <- function(f, lay, up, dn) {
+    d <- read_csv(file.path(D, f)) %>% mutate(name = sub(" \\(ex .*\\)$", "", name), layer = lay, feature_id = as.character(feature_id))
+    h <- filter(d, group == "Hadza (Tanzania)") %>% mutate(score = high - low - missing)
+    keep <- c(h %>% filter(direction == "above") %>% slice_max(score, n = up) %>% pull(name),
+              h %>% filter(direction == "below") %>% slice_min(score, n = dn) %>% pull(name))
+    filter(d, name %in% keep)
+  }
+  ge <- bind_rows(rd("f5_genera.csv", "genera", 5, 3), rd("f5_ko.csv", "gene families", 4, 3)) %>%
+    mutate(name = sub(" \\[EC:[^]]*\\]$", "", name), layer = factor(layer, c("genera", "gene families")))
+  hz <- filter(ge, group == "Hadza (Tanzania)") %>% mutate(score = high - low - missing)
+  ordr <- hz %>% arrange(desc(layer), score) %>% pull(name)
+  ge$name <- factor(ge$name, ordr); hz$name <- factor(hz$name, ordr)
+  ital <- hz$name[hz$layer == "genera"]
+  bars <- call_bars(hz %>% mutate(side = layer)) %>% mutate(name = factor(name, ordr), layer = side)
+  cmp <- ge %>% filter(group != "Hadza (Tanzania)") %>% mutate(x = ifelse(direction == "above", high, low + missing),
+           who = factor(ifelse(group == "Other baseline studies", "other healthy adults", "US participants, same study"),
+                        c("US participants, same study", "other healthy adults")))
+  ylab_it <- function(br) as.expression(lapply(br, function(n) if (n %in% ital) bquote(italic(.(n))) else bquote(.(n))))
   b <- ggplot(bars, aes(y = name)) +
     geom_tile(aes(x = x, width = w, fill = what), height = 0.68) +
     geom_point(data = cmp, aes(x = 100 * x, shape = who), size = 1.5, colour = INK, fill = "white", stroke = 0.45) +
-    facet_grid(side ~ ., scales = "free_y", space = "free_y") +
+    facet_grid(layer ~ ., scales = "free_y", space = "free_y") +
     scale_fill_manual(values = CALLS, name = "Hadza samples") +
     scale_shape_manual(values = c("US participants, same study" = 23, "other healthy adults" = 21), name = NULL) +
+    scale_y_discrete(labels = ylab_it) +
     scale_x_continuous(limits = c(0, 78), breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = c(0, 0)) +
-    geom_text(data = data.frame(side = factor(c("above the range", "below or missing"), c("above the range", "below or missing")),
-                                name = factor(c(ordr[6], ordr[1]), ordr), t = c("above the healthy range", "below the range or missing")),
-              aes(x = 76, label = t), hjust = 1, size = pt(6), family = FONT, colour = INK2) +
-    labs(x = "samples outside the healthy range", y = NULL, title = "the common gut genera behind the shift") +
+    labs(x = "samples outside the healthy range", y = NULL, title = "the genera and gene families behind the shift") +
     guides(fill = guide_legend(order = 1, ncol = 1, keywidth = unit(6, "pt"), keyheight = unit(6, "pt")), shape = guide_legend(order = 2, ncol = 1)) +
-    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(face = "italic", colour = INK, size = 6.5), legend.position = "right",
-          strip.text.y = element_blank(), panel.spacing.y = unit(5, "pt"))
-  p <- (a | b) + plot_layout(widths = c(1, 1.3)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig5", DOUBLE, 2.28)
+    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5), legend.position = "right",
+          strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5), panel.spacing.y = unit(5, "pt"))
+  p <- (a | b) + plot_layout(widths = c(1, 1.42)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
+  save_fig(p, "fig5", DOUBLE, 2.30)
 }
 
 args <- commandArgs(trailingOnly = TRUE); if (length(args) == 0) args <- paste0("fig", 1:5)
