@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from checkgm import REPO
 from checkgm.score import LAYER_SPEC, interp_percentile
 
 KIND = {"taxonomy_family": "clr", "taxonomy_genus": "clr", "taxonomy_species": "clr", "ko_eggnog": "gene", "ko_kofam": "gene", "pfam": "gene", "module": "completeness"}
@@ -245,5 +246,6 @@ def load_config(path: str | None = None) -> dict:
     """Load a calibration configuration (YAML) from `path`. The configuration the method was developed with is shipped in the
     repository as docs/configs/s11.yaml; the installed package carries no default, so a missing path is a ValueError."""
     if not path:
-        raise ValueError("load_config needs the path of a calibration configuration, for example docs/configs/s11.yaml from the repository")
+        raise ValueError(f"load_config needs the path of a calibration configuration, for example docs/configs/s11.yaml from the "
+                         f"repository ({REPO}), which the installed package does not carry")
     return yaml.safe_load(open(path))

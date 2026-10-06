@@ -4,6 +4,7 @@
   checkgm normalize --bundle B --query DIR [DIR ...] --out OUT          # assembly-based: query directories -> OUT/normalized/<sample>.parquet + qc.tsv
   checkgm import-mgnify --bundle B --analysis-dir DIR [...] --out OUT   # assembly-based: MGnify v5 analysis folders -> the same
   checkgm score --bundle B --normalized OUT [--calibration CAL] --out REPORT   # -> scores.parquet, summaries.tsv, rejections.tsv, report.md
+  checkgm run-normalize --bundle B --query DIR [...] --out REPORT               # normalize + score in one go
   checkgm run-mgnify --bundle B --analysis-dir DIR [...] --out REPORT           # import + score in one go
   checkgm import-metaphlan --bundle B --input PROFILE [...] [--reads-tsv sample<TAB>reads] --out OUT   # read-based: MetaPhlAn output -> normalized
   checkgm run-metaphlan --bundle B --input PROFILE [...] --out REPORT           # import + score against a read-based baseline
@@ -28,16 +29,17 @@ import time
 
 import pandas as pd
 
-from checkgm import __version__
+from checkgm import REPO, __version__
 from checkgm.normalize import Backbone, BundleSpec, normalize, normalize_mgnify_v5, read_query_dir
-from checkgm.paths import DEFAULT_ASSEMBLY_VERSION, DEFAULT_READS_VERSION, ENV_VAR, bundle_dirs, list_bundles, resolve_bundle
+from checkgm.paths import (DEFAULT_ASSEMBLY_VERSION, DEFAULT_READS_VERSION, ENV_VAR, bundle_dirs, bundle_dirs_source,
+                           legacy_env_note, list_bundles, resolve_bundle)
 from checkgm.score import Bundle, score
 
 LAYERS = ["taxonomy_family", "taxonomy_genus", "taxonomy_species", "ko_eggnog", "ko_kofam", "pfam", "module", "ko_humann", "pathway_humann"]
 QC_FLOAT_FORMAT = "%.17g"   # 17 significant digits round-trip every double exactly, so import + score == run-* byte for byte
 
-# which kind of baseline each subcommand needs (manifest.json profile_type)
-NEEDS_PROFILE_TYPE = {"normalize": "assembly", "import-mgnify": "assembly", "run-mgnify": "assembly",
+# which kind of baseline each subcommand needs (manifest.json profile_type); `score` infers it from the normalized directory
+NEEDS_PROFILE_TYPE = {"normalize": "assembly", "run-normalize": "assembly", "import-mgnify": "assembly", "run-mgnify": "assembly",
                       "import-metaphlan": "reads", "run-metaphlan": "reads"}
 PROFILE_TYPE_WORD = {"assembly": "assembly-based", "reads": "read-based"}
 # how a normalized directory records which measurement it came from (sample_meta.json "pipeline")
@@ -47,20 +49,67 @@ CURRENT_SERIES = {"assembly": DEFAULT_ASSEMBLY_VERSION, "reads": DEFAULT_READS_V
 
 # --------------------------------------------------------------------------------------------- checks
 
+def warn(msg: str):
+    """Print one diagnostic on stderr in the single form the docs promise, `checkgm: ...`.
+
+    That prefix is the one recognition rule given to users and to scripts, so every notice goes through here; per-sample
+    progress stays on stdout, where a reader redirecting a log expects it."""
+    print(f"checkgm: {msg}", file=sys.stderr, flush=True)
+
+
+def _load_json_object(p: str, what: str, remedy: str) -> dict:
+    """A JSON object read from `p`, or ValueError naming the path.
+
+    The bare text of a parse error ("Expecting property name ...", "Unterminated string starting at") tells a user whose
+    archive was truncated nothing they can act on, and a file holding a list or a number parses without complaint only to
+    fail later inside a comprehension, so both are turned here into one sentence that names the file and what to do."""
+    try:
+        m = json.load(open(p))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{what} is not readable JSON: {p} ({e.msg}: line {e.lineno}, column {e.colno}); {remedy}") from None
+    if not isinstance(m, dict):
+        raise ValueError(f"{what} is not a JSON object: {p}; {remedy}")
+    return m
+
+
 def _manifest(bundle: str) -> dict:
-    return json.load(open(os.path.join(bundle, "manifest.json")))
+    """The bundle's manifest.json, reported with its path when it cannot be read (see _load_json_object)."""
+    return _load_json_object(os.path.join(bundle, "manifest.json"), "bundle manifest",
+                             "the bundle archive may be incomplete, check its sha256 against the one published with it")
+
+
+def bundle_id_of(bundle: str) -> str:
+    """The bundle's own id, falling back to its directory name for a manifest that omits the field.
+
+    Every import step stamps this beside the pipeline name in sample_meta.json, so that `score` can say which bundle
+    normalized the tables it is handed rather than assume it was the one now named."""
+    return str(_manifest(bundle).get("bundle_id") or os.path.basename(os.path.normpath(bundle)))
+
+
+def _sample_meta(out: str) -> dict:
+    """OUT/sample_meta.json as {sample_id: metadata}, or {} when the directory has none.
+
+    The guards are the manifest's: a half-copied directory and one whose sample_meta.json was written by hand are both
+    common enough that the file is never trusted to be an object of objects."""
+    p = os.path.join(out, "sample_meta.json")
+    if not os.path.isfile(p):
+        return {}
+    return _load_json_object(p, "sample_meta.json", "it maps sample id -> metadata, so re-run the import step that wrote the directory")
 
 
 def check_bundle_type(bundle: str, cmd: str, required: str | None = None) -> dict:
     """Read the bundle manifest and raise ValueError when its profile_type does not fit the subcommand.
 
     `required` overrides the table NEEDS_PROFILE_TYPE (used by `score`, which infers the needed type from the normalized
-    data). Returns the manifest so callers do not read it twice."""
+    data). Returns the manifest so callers do not read it twice. A command for which neither a caller nor the table
+    names a type is an internal error rather than a command exempt from the check."""
     m = _manifest(bundle)
     need = required or NEEDS_PROFILE_TYPE.get(cmd)
+    if not need:
+        raise ValueError(f"no bundle profile_type is registered for '{cmd}' (internal error)")
     have = m.get("profile_type", "")
     warn_superseded(m)
-    if need and have != need:
+    if have != need:
         art = {"assembly": "an", "reads": "a"}
         raise ValueError(f"bundle '{m.get('bundle_id', os.path.basename(bundle))}' is {art.get(have, 'a')} {PROFILE_TYPE_WORD.get(have, have)} baseline "
                          f"(profile_type '{have}'), but '{cmd}' needs {art[need]} {PROFILE_TYPE_WORD[need]} one "
@@ -78,9 +127,18 @@ def warn_superseded(manifest: dict):
     """Print one stderr line when the bundle belongs to an older series than the one this release was validated with.
 
     Scoring goes ahead (exit status unchanged); the README lists the superseded series."""
+    cur = superseded_by(manifest)
+    if cur:
+        warn(f"bundle series v{bundle_series(manifest.get('bundle_id', ''))} is superseded by v{cur} "
+             f"(bundle '{manifest.get('bundle_id')}'); results from it are not the validated ones")
+
+
+def superseded_by(manifest: dict) -> str | None:
+    """The current series when the bundle belongs to an older one, else None (also None when the id carries no version)."""
     have = bundle_series(manifest.get("bundle_id", "")); cur = CURRENT_SERIES.get(manifest.get("profile_type", ""))
     if have and cur and tuple(int(x) for x in have.split(".")) < tuple(int(x) for x in cur.split(".")):
-        print(f"checkgm: bundle series v{have} is superseded by v{cur} (bundle '{manifest.get('bundle_id')}'); results from it are not the validated ones", file=sys.stderr, flush=True)
+        return cur
+    return None
 
 
 def load_calibration(a):
@@ -117,8 +175,7 @@ def read_reads_tsv(path: str) -> dict:
         rest = bad.iloc[1:] if looks_like_header else bad
         if len(rest):
             shown = ", ".join(f"line {i + 1} ({s!r})" for i, s in zip(rest.index[:5], rest["sample"].iloc[:5]))
-            print(f"checkgm: {len(rest)} row(s) of {path} have no numeric read count and are ignored: {shown}"
-                  f"{', ...' if len(rest) > 5 else ''}", file=sys.stderr, flush=True)
+            warn(f"{len(rest)} row(s) of {path} have no numeric read count and are ignored: {shown}{', ...' if len(rest) > 5 else ''}")
     keep = num.notna()
     return {s: int(r) for s, r in zip(rt.loc[keep, "sample"], num[keep])}
 
@@ -140,11 +197,16 @@ def save_normalized(norm: dict, out: str):
     pd.DataFrame(qcs).to_csv(os.path.join(out, "qc.tsv"), sep="\t", index=False, float_format=QC_FLOAT_FORMAT)
 
 
+def check_normalized_dir(out: str):
+    """Raise FileNotFoundError when `out` is not an import step's output directory, which qc.tsv is the marker of."""
+    if not os.path.isfile(os.path.join(out, "qc.tsv")):
+        raise FileNotFoundError(f"--normalized directory has no qc.tsv: {out} (run 'checkgm import-metaphlan', 'import-mgnify' or 'normalize' first)")
+
+
 def load_normalized(out: str) -> dict:
     """Read back what save_normalized wrote: {sample_id: {layer: DataFrame, ..., "qc": dict}}."""
     nd = os.path.join(out, "normalized"); qcp = os.path.join(out, "qc.tsv")
-    if not os.path.isfile(qcp):
-        raise FileNotFoundError(f"--normalized directory has no qc.tsv: {out} (run 'checkgm import-metaphlan', 'import-mgnify' or 'normalize' first)")
+    check_normalized_dir(out)
     qc = pd.read_csv(qcp, sep="\t", keep_default_na=False, float_precision="round_trip")   # exact: import + score == run-* byte for byte
     norm = {}
     for q in qc.to_dict("records"):
@@ -161,16 +223,54 @@ def load_normalized(out: str) -> dict:
 
 
 def normalized_profile_type(out: str) -> str | None:
-    """'reads' or 'assembly' according to OUT/sample_meta.json, or None when the directory does not say."""
-    p = os.path.join(out, "sample_meta.json")
-    if not os.path.isfile(p):
-        return None
+    """'reads' or 'assembly' according to OUT/sample_meta.json, or None when the directory does not say.
+
+    A directory without the file, and one whose entries disagree, both answer None; the caller turns each into its own
+    message, the two being corrected differently."""
     def pipeline_name(v: dict) -> str:
         """Pipeline name of one sample_meta.json entry: import steps write a string, a query's sample.json an object {name, version, ...}."""
         pl = v.get("pipeline", "")
         return str(pl.get("name", "")) if isinstance(pl, dict) else str(pl)
-    kinds = {PIPELINE_PROFILE_TYPE.get(pipeline_name(v), "assembly") for v in json.load(open(p)).values() if isinstance(v, dict)}
+    kinds = {PIPELINE_PROFILE_TYPE.get(pipeline_name(v), "assembly") for v in _sample_meta(out).values() if isinstance(v, dict)}
     return kinds.pop() if len(kinds) == 1 else None
+
+
+def warn_other_bundle(out: str, manifest: dict):
+    """Warn when the tables were normalized against a bundle other than the one they are about to be scored against.
+
+    Normalizing once and scoring against several bundles of one series is an advertised use, so the difference is
+    reported rather than refused. It is worth reporting because each bundle carries its own CLR basis: a feature that
+    left the basis between the two is dropped from the comparison, while the values of the features that remain stay
+    centred over the basis they were computed on, and no column of the output records either fact. A directory written
+    before this stamp existed carries no bundle id and is passed over in silence."""
+    have = str(manifest.get("bundle_id") or "")
+    other = sorted({str(v["bundle_id"]) for v in _sample_meta(out).values()
+                    if isinstance(v, dict) and v.get("bundle_id") and str(v["bundle_id"]) != have})
+    if other:
+        warn(f"the tables in {out} were normalized against {' and '.join(other)}, not '{have}'; they are scored as they "
+             f"stand, which is what comparing bundles of one series asks for, but every layer's CLR stays centred over "
+             f"the basis it was computed on and features outside this bundle's basis are left out of the comparison")
+
+
+def required_profile_type(out: str) -> str:
+    """The kind of bundle the tables in a normalized directory must be scored against, from OUT/sample_meta.json.
+
+    Nothing else in the directory records which measurement produced the tables, so a directory that does not say is
+    refused rather than scored against whatever bundle was named: were the check merely skipped, MetaPhlAn species CLR
+    values would be read as percentiles of an assembly reference, which is the one comparison the bundle check exists to
+    prevent. The file is easily lost, since only qc.tsv is needed to read the tables back, and the corrective action
+    differs between a directory that was never written by an import step and one that holds two measurements at once."""
+    check_normalized_dir(out)
+    t = normalized_profile_type(out)
+    if t is not None:
+        return t
+    p = os.path.join(out, "sample_meta.json")
+    if not os.path.isfile(p):
+        raise FileNotFoundError(f"--normalized directory has no sample_meta.json, so which measurement it came from cannot be told: "
+                                f"{out} (point --normalized at the directory the import step wrote; 'normalize', 'import-mgnify' and "
+                                f"'import-metaphlan' all write it beside qc.tsv)")
+    raise ValueError(f"--normalized directory does not name one measurement: {out} (sample_meta.json names none or several, and a "
+                     f"bundle is a baseline for exactly one; import and score each measurement separately)")
 
 
 # --------------------------------------------------------------------------------------------- import steps
@@ -178,10 +278,11 @@ def normalized_profile_type(out: str) -> str | None:
 def cmd_normalize(a):
     """`checkgm normalize`: query directories (docs/query_format.md) -> normalized tables under --out."""
     check_exists(a.query, "--query", "dir")
+    bid = bundle_id_of(a.bundle)
     spec = BundleSpec(a.bundle); bb = Backbone(spec.backbone_path); norm = {}; meta = {}
     for qd in a.query:
         t = read_query_dir(qd); sid = t["meta"].get("sample_id") or os.path.basename(os.path.normpath(qd))
-        norm[sid] = normalize(sid, t["contigs"], t["cds"], t["cds_tax"], t["modules"], spec, bb); meta[sid] = t["meta"]
+        norm[sid] = normalize(sid, t["contigs"], t["cds"], t["cds_tax"], t["modules"], spec, bb); meta[sid] = dict(t["meta"], bundle_id=bid)
         print(sid, norm[sid]["qc"]["status"], norm[sid]["qc"]["quality_band"], flush=True)
     os.makedirs(a.out, exist_ok=True)
     save_normalized(norm, a.out); json.dump(meta, open(os.path.join(a.out, "sample_meta.json"), "w"), indent=1)
@@ -197,7 +298,7 @@ def cmd_import_mgnify(a):
         norm[sid] = normalize_mgnify_v5(sid, d, spec, bb)
         print(sid, norm[sid]["qc"]["status"], norm[sid]["qc"]["quality_band"], f"{time.time()-t0:.0f}s", flush=True)
     os.makedirs(a.out, exist_ok=True)
-    save_normalized(norm, a.out); json.dump({s: {"pipeline": "mgnify_v5_assembly"} for s in norm}, open(os.path.join(a.out, "sample_meta.json"), "w"), indent=1)
+    save_normalized(norm, a.out); json.dump({s: {"pipeline": "mgnify_v5_assembly", "bundle_id": bundle_id_of(a.bundle)} for s in norm}, open(os.path.join(a.out, "sample_meta.json"), "w"), indent=1)
     return norm
 
 
@@ -219,19 +320,35 @@ def cmd_import_metaphlan(a):
         if not files:
             continue
         if layer not in spec.fbasis:
-            print(f"bundle has no {layer} layer; {len(files)} HUMAnN file(s) ignored", flush=True); continue
-        tabs = {}
+            warn(f"bundle has no {layer} layer; {len(files)} HUMAnN file(s) ignored"); continue
+        tabs, src = {}, {}
         for path in files:
-            tabs.update(read_humann(path))
-        if len(tabs) == 1 and len(norm) == 1 and next(iter(tabs)) not in norm:   # one sample on each side: pair them whatever the names
-            tabs = {next(iter(norm)): next(iter(tabs.values()))}
+            for sid, v in read_humann(path).items():
+                tabs[sid] = v; src[sid] = path
+        if len(tabs) == 1 and len(norm) == 1 and next(iter(tabs)) not in norm:
+            # One sample on each side: pair them whatever the column is called, since HUMAnN's column names are derived
+            # from file names and rarely survive a rename. The pairing is announced, because a table belonging to another
+            # sample would otherwise be grafted onto this profile's taxonomy without leaving a trace.
+            fsid = next(iter(tabs)); sid = next(iter(norm))
+            warn(f"{layer}: HUMAnN sample '{fsid}' ({src[fsid]}) paired with profile '{sid}' (one sample on each side, so the "
+                 f"name in the table is ignored); check that the two belong to the same sample")
+            tabs = {sid: tabs[fsid]}; src = {sid: src[fsid]}
         for sid, v in tabs.items():
             if sid not in norm:
-                print(f"{layer}: sample {sid} has no MetaPhlAn profile in this run; skipped", flush=True); continue
+                warn(f"{layer}: sample {sid} ({src[sid]}) has no MetaPhlAn profile in this run; skipped"); continue
             t, q = normalize_function(v, layer, spec); norm[sid][layer] = t; norm[sid]["qc"].update(q)
-            print(sid, layer, f"detected {int((t.proportion_mapped > 0).sum())} of {len(t)} basis features, share in basis {q[layer + '_share_in_basis']:.3f}", flush=True)
+            share = q[layer + "_share_in_basis"]
+            print(sid, layer, f"detected {int((t.proportion_mapped > 0).sum())} of {len(t)} basis features, share in basis {share:.3f}", flush=True)
+            if not share > 0:   # also catches NaN; a layer that mapped nothing is a user error, not a result
+                warn(f"{layer}: nothing in {src[sid]} maps to the bundle's {layer} basis for sample {sid}, so the layer carries no "
+                     f"information (wrong kind of table, or a gene-family table that is neither UniRef90 nor KO?)")
+            elif t["clr"].isna().any():
+                # Too few features for the multiplicative zero replacement, which then leaves the CLR undefined. The
+                # layer is still written, but a NaN column scores as nothing at all and must not pass unremarked.
+                warn(f"{layer}: the CLR of {int(t['clr'].isna().sum())} of {len(t)} basis features is undefined for sample {sid}, too "
+                     f"few of them being detected in {src[sid]}; this layer's scores are not usable")
     os.makedirs(a.out, exist_ok=True)
-    save_normalized(norm, a.out); json.dump({s: {"pipeline": "metaphlan"} for s in norm}, open(os.path.join(a.out, "sample_meta.json"), "w"), indent=1)
+    save_normalized(norm, a.out); json.dump({s: {"pipeline": "metaphlan", "bundle_id": bundle_id_of(a.bundle)} for s in norm}, open(os.path.join(a.out, "sample_meta.json"), "w"), indent=1)
     return norm
 
 
@@ -308,8 +425,7 @@ def cmd_score(a, norm=None, cal=None):
     norm / cal are passed by the run-* commands, which have already imported the samples and loaded the calibration."""
     if norm is None:
         check_exists([a.normalized], "--normalized", "dir")
-        need = normalized_profile_type(a.normalized)
-        check_bundle_type(a.bundle, "score", required=need)
+        warn_other_bundle(a.normalized, check_bundle_type(a.bundle, "score", required=required_profile_type(a.normalized)))
         cal = load_calibration(a)
         norm = load_normalized(a.normalized)
     bundle = Bundle(a.bundle)
@@ -318,16 +434,33 @@ def cmd_score(a, norm=None, cal=None):
     print(json.dumps({"scored": int(r["summaries"]["analysis_id"].nunique()) if not r["summaries"].empty else 0, "rejected": len(r["rejections"]), "rows": len(r["scores"]), "out": a.out}))
 
 
-def cmd_bundles(a):
-    """`checkgm bundles`: list the bundles found under $CHECKGM_BUNDLES (id, profile type, pool size, path)."""
-    found = list_bundles()
+def cmd_bundles(a) -> int:
+    """`checkgm bundles`: list the bundles found under $CHECKGM_BUNDLES (id, profile type, pool size, path, series).
+
+    This is the command that answers "what do I have and which one should I use", so each row says whether its series is
+    the one this release was validated with; the warning would otherwise arrive only once a run is under way. One
+    unreadable bundle is reported and passed over rather than aborting the listing, since the bundle a user wants is
+    rarely the broken one, and exit 1 is kept for the case where every bundle found was unreadable. A search path that is
+    unset, or that holds no bundle, is a question answered rather than an error: one line on stderr and exit 0."""
+    var = bundle_dirs_source(); found = list_bundles(); shown = 0
     if not bundle_dirs():
-        print(f"{ENV_VAR} is not set; give --bundle a directory path or export {ENV_VAR}=/dir/with/bundles", file=sys.stderr)
+        warn(f"{ENV_VAR} is not set; give --bundle a directory path or export {ENV_VAR}=/dir/with/bundles")
     for b in found:
-        m = _manifest(b)
-        print(f"{m['bundle_id']}\t{m.get('profile_type', '')}\t{m['n_samples']} samples, {m['n_studies']} studies\t{b}")
+        try:
+            m = _manifest(b)
+        except (ValueError, OSError) as e:
+            warn(f"{os.path.basename(b)} skipped: {e}"); continue
+        cur = superseded_by(m)
+        # `current` is a statement about the series this release was validated with, so it can only be made for a profile
+        # type that release knows; a bundle of some other kind gets an empty field rather than a reassurance nobody checked.
+        known = m.get("profile_type", "") in CURRENT_SERIES and bundle_series(m.get("bundle_id", ""))
+        series = f"superseded by v{cur}" if cur else ("current" if known else "")
+        print(f"{m.get('bundle_id', os.path.basename(b))}\t{m.get('profile_type', '')}\t"
+              f"{m.get('n_samples', '?')} samples, {m.get('n_studies', '?')} studies\t{b}\t{series}")
+        shown += 1
     if bundle_dirs() and not found:
-        print(f"no bundles under {ENV_VAR} = {os.pathsep.join(bundle_dirs())}", file=sys.stderr)
+        warn(f"no bundles under {var} = {os.pathsep.join(bundle_dirs())}{legacy_env_note()}")
+    return 1 if found and not shown else 0
 
 
 # --------------------------------------------------------------------------------------------- argument parser
@@ -338,18 +471,29 @@ H = {  # one sentence per argument, shared by the subcommands that take it (docs
     "calibration": "calibration directory produced with the checkgm.calibrate module, for a measurement pipeline other than the reference's (none is shipped)",
     "input": "MetaPhlAn 3 single-sample profile(s) (#clade_name, NCBI_tax_id, relative_abundance) or a merged table (clade_name, sample columns)",
     "reads_tsv": "two columns sample<TAB>reads processed, used for the depth band when the profile header has no '#N reads processed' line; a header line is skipped",
-    "humann_genefamilies": "HUMAnN 3 gene-family table(s) (UniRef90 or KO rows); adds the ko_humann layer when the bundle has it",
-    "humann_pathabundance": "HUMAnN 3 pathway-abundance table(s) (MetaCyc rows); adds the pathway_humann layer when the bundle has it",
+    "humann_genefamilies": "HUMAnN 3 gene-family table(s) (UniRef90 or KO rows); adds the ko_humann layer when the bundle has it, "
+                           "and with one profile and one table the two are paired whatever the table's column is called",
+    "humann_pathabundance": "HUMAnN 3 pathway-abundance table(s) (MetaCyc rows); adds the pathway_humann layer when the bundle has it, "
+                            "paired with the profile as --humann-genefamilies is",
     "analysis_dir": "MGnify pipeline v5 assembly analysis download folder(s), one per sample, named by the MGYA accession",
-    "query": "query directory(ies) in the format of docs/query_format.md (contigs.tsv, cds.tsv, cds_taxonomy.tsv, optional modules.tsv and sample.json)",
-    "normalized": "directory written by an import step (normalize, import-mgnify or import-metaphlan): normalized/, qc.tsv, sample_meta.json",
+    "query": f"one or more query directories in the format described in docs/query_format.md ({REPO}): contigs.tsv, cds.tsv, cds_taxonomy.tsv, optional modules.tsv and sample.json",
+    "normalized": "directory written by an import step (normalize, import-mgnify or import-metaphlan): normalized/, qc.tsv and "
+                  "sample_meta.json, the last naming the measurement the bundle is checked against and the bundle that normalized "
+                  "the tables, so all three are needed",
 }
+# --out means a normalized directory, a report directory or both, according to the subcommand; the opening words stay the same
+OUT_H = {"normalized": "output directory for the normalized tables (normalized/, qc.tsv, sample_meta.json); created if needed",
+         "report": "output directory for the report (scores.parquet, summaries.tsv, rejections.tsv, report.md), which may be the "
+                   "--normalized directory itself, leaving one directory with both halves; created if needed",
+         "both": "output directory for both halves, the normalized tables and the report, which this command writes side by side; created if needed"}
 
 
-def _add(p, *names):
+def _add(p, *names, out: str | None = None):
     for n in names:
         flag = "--" + n.replace("_", "-")
-        if n in ("bundle", "out"):
+        if n == "out":
+            p.add_argument(flag, required=True, help=OUT_H[out] if out else H[n])
+        elif n == "bundle":
             p.add_argument(flag, required=True, help=H[n])
         elif n in ("input", "analysis_dir", "query"):
             p.add_argument(flag, nargs="+", required=True, help=H[n])
@@ -369,36 +513,43 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--version", action="version", version=f"checkgm {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="COMMAND")
     sub.add_parser("bundles", help=f"list the bundles found under ${ENV_VAR}",
-                   description=f"List the bundles found under ${ENV_VAR}: id, profile type (assembly or reads), pool size and path.")
+                   description=f"List the bundles found under ${ENV_VAR}: id, profile type (assembly or reads), pool size, path, and whether "
+                               f"the bundle's series is the one this release was validated with.")
     p = sub.add_parser("normalize", help="assembly-based: normalize query directories from any assembly pipeline",
-                       description="Normalize one query directory per sample (docs/query_format.md) with the rules stored in an assembly-based bundle. "
-                                   "Writes OUT/normalized/<sample>.parquet, OUT/qc.tsv and OUT/sample_meta.json; score them with 'checkgm score'.")
-    _add(p, "bundle", "query", "out")
+                       description="Normalize one query directory per sample (format: docs/query_format.md, see --query below) with the rules "
+                                   "stored in an assembly-based bundle. Writes OUT/normalized/<sample>.parquet, OUT/qc.tsv and "
+                                   "OUT/sample_meta.json; score them with 'checkgm score', or use 'run-normalize' to do both at once.")
+    _add(p, "bundle", "query", "out", out="normalized")
     p = sub.add_parser("import-mgnify", help="assembly-based: normalize MGnify v5 assembly analyses",
                        description="Normalize MGnify pipeline v5 assembly analysis folders (the reference's own measurement, so no calibration) "
-                                   "with the rules of an assembly-based bundle. Writes the same files as 'normalize'.")
-    _add(p, "bundle", "analysis_dir", "out")
+                                   "with the rules of an assembly-based bundle. Writes the same files as 'normalize'; score them with "
+                                   "'checkgm score', or use 'run-mgnify' to do both at once.")
+    _add(p, "bundle", "analysis_dir", "out", out="normalized")
     p = sub.add_parser("import-metaphlan", help="read-based: normalize MetaPhlAn 3 profiles (and HUMAnN 3 tables)",
                        description="Normalize MetaPhlAn 3 profiles, and optionally HUMAnN 3 gene-family and pathway tables, with the rules of a read-based bundle. "
-                                   "Species-level rows are placed on the bundle's taxonomy; proportions over the bundle's basis are CLR-transformed. Writes the same files as 'normalize'.")
-    _add(p, "bundle", "input", "reads_tsv", "humann_genefamilies", "humann_pathabundance", "out")
+                                   "Species-level rows are placed on the bundle's taxonomy; proportions over the bundle's basis are CLR-transformed. Writes the same "
+                                   "files as 'normalize'; score them with 'checkgm score', or use 'run-metaphlan' to do both at once.")
+    _add(p, "bundle", "input", "reads_tsv", "humann_genefamilies", "humann_pathabundance", "out", out="normalized")
     p = sub.add_parser("score", help="score normalized tables against a bundle and write the report",
                        description="Compare normalized tables (from normalize, import-mgnify or import-metaphlan) with the bundle. "
                                    "Writes scores.parquet (one row per sample x layer x feature), summaries.tsv (one row per sample x layer with the excess test), "
                                    "rejections.tsv and report.md.")
-    _add(p, "bundle", "normalized", "calibration", "out")
+    _add(p, "bundle", "normalized", "calibration", "out", out="report")
+    p = sub.add_parser("run-normalize", help="assembly-based: normalize and score query directories in one step",
+                       description="Run 'normalize' and then 'score' into one output directory.")
+    _add(p, "bundle", "query", "calibration", "out", out="both")
     p = sub.add_parser("run-mgnify", help="assembly-based: import-mgnify and score in one step",
                        description="Run 'import-mgnify' and then 'score' into one output directory.")
-    _add(p, "bundle", "analysis_dir", "calibration", "out")
+    _add(p, "bundle", "analysis_dir", "calibration", "out", out="both")
     p = sub.add_parser("run-metaphlan", help="read-based: import-metaphlan and score in one step",
                        description="Run 'import-metaphlan' and then 'score' into one output directory.")
-    _add(p, "bundle", "input", "reads_tsv", "humann_genefamilies", "humann_pathabundance", "calibration", "out")
+    _add(p, "bundle", "input", "reads_tsv", "humann_genefamilies", "humann_pathabundance", "calibration", "out", out="both")
     return ap
 
 
 def _dispatch(a) -> int:
     if a.cmd == "bundles":
-        cmd_bundles(a); return 0
+        return cmd_bundles(a)
     a.bundle = resolve_bundle(a.bundle)
     if a.cmd != "score":
         check_bundle_type(a.bundle, a.cmd)
@@ -410,10 +561,16 @@ def _dispatch(a) -> int:
         cmd_score(a)
     elif a.cmd == "import-metaphlan":
         cmd_import_metaphlan(a)
+    elif a.cmd == "run-normalize":
+        cal = load_calibration(a); a.normalized = a.out; norm = cmd_normalize(a); cmd_score(a, norm, cal)
     elif a.cmd == "run-metaphlan":
         cal = load_calibration(a); a.normalized = a.out; norm = cmd_import_metaphlan(a); cmd_score(a, norm, cal)
     elif a.cmd == "run-mgnify":
         cal = load_calibration(a); a.normalized = a.out; norm = cmd_import_mgnify(a); cmd_score(a, norm, cal)
+    else:
+        # Unreachable through argparse, but this chain is the single place a new subcommand has to be registered, and
+        # silent success is the worst way to learn that it was not.
+        raise ValueError(f"unhandled subcommand '{a.cmd}' (internal error)")
     return 0
 
 
@@ -422,9 +579,14 @@ def main(argv=None) -> int:
     a = build_parser().parse_args(argv)
     try:
         return _dispatch(a)
-    except FileNotFoundError as e:
+    except FileNotFoundError as e:   # must stay ahead of OSError, of which it is a subclass with a better message
         msg = e.args[0] if e.args and isinstance(e.args[0], str) and not e.filename else (f"file not found: {e.filename}" if e.filename else str(e))
         print(f"checkgm: {msg}", file=sys.stderr); return 1
+    except OSError as e:
+        # Whatever the filesystem refuses — an unreadable manifest, a directory where a file was expected, a full disk —
+        # is as much a user error as a missing path, and the contract promises one line for all of them. Python's own
+        # str() of these already names the path and the reason ("[Errno 13] Permission denied: '/x/manifest.json'").
+        print(f"checkgm: {e}", file=sys.stderr); return 1
     except KeyError as e:
         print(f"checkgm: input is missing the expected column or field {e}", file=sys.stderr); return 1
     except ValueError as e:

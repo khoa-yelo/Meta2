@@ -6,7 +6,9 @@
 # Usage: Rscript scripts/viz2/figures.R [fig1 fig2 ...]   (default: all). Output: figures/v2/figN.pdf (+ .png preview, 300 dpi).
 suppressPackageStartupMessages({library(ggplot2); library(patchwork); library(dplyr); library(tidyr); library(readr); library(scales)})
 options(readr.show_col_types = FALSE, dplyr.summarise.inform = FALSE)
-P <- "/home/classes/bios/270/khoa/meta2/project"; D <- file.path(P, "figures/v2/data"); OUT <- file.path(P, "figures/v2")
+# the project root comes from the environment, as the README documents, and falls back to the tree this was written in
+P <- Filter(nzchar, c(Sys.getenv("CHECKGM_PROJECT"), Sys.getenv("REFMB_PROJECT"), "/home/classes/bios/270/khoa/meta2/project"))[1]
+D <- file.path(P, "figures/v2/data"); OUT <- file.path(P, "figures/v2")
 FONT <- "Nimbus Sans"
 SINGLE <- 3.5; DOUBLE <- 7.16                                       # IEEE column and page widths (in)
 
@@ -51,8 +53,21 @@ fold_lab <- function(x) {                                            # log2 diff
 }
 pct_lab <- function(p) ifelse(p <= 1, "below the 1st percentile", ifelse(p >= 99, "above the 99th percentile", paste(ordinal(round(p)), "percentile")))
 log2_axis <- function(br) ifelse(br == 0, "typical", ifelse(br > 0, paste0(2^br, "×"), paste0("1/", 2^-br)))
+# discrete-axis labeller that italicises the taxon names in `ital`, so families and genera are set the same way in the
+# figures as in the text; everything else (gene and pathway names) stays roman
+ital_lab <- function(ital) function(br) as.expression(lapply(br, function(n) if (n %in% ital) bquote(italic(.(n))) else bquote(.(n))))
 
-# ---- schematic helpers (coordinates in inches of the panel, so circles stay round)
+# ---- schematic helpers. The schematics (figs 1a, 2a) are laid out in a unit that renders as the same length in x and in
+# y, which coord_cartesian does not give: pinning the patchwork row to H inches leaves the row H + 0.152 in tall, so the
+# y unit came out 1.17x the x unit and neither the round corners nor the text block inside a box was what it claimed to
+# be. coord_fixed is used instead, and the row is pinned to the inches the canvas then needs. Two numbers are measured in
+# the rendered PDF rather than derived: patchwork insets the assembled figure by MARG on every side, which leaves PTU
+# points for each unit of a DOUBLE-wide canvas, and gives the pinned row that inset back at top and bottom. Only the
+# point-to-unit conversions below depend on them, so a few per cent would move a text block by a quarter of a point, and
+# pinning slightly tall merely centres the canvas in its row whereas pinning short would also narrow it.
+MARG <- 5.48; PTU <- 70.40
+U <- function(p) p / PTU                                             # real points -> canvas units
+pin_row <- function(H) unit(c(H * PTU / 72 - 2 * MARG / 72 + 0.007, 1), c("in", "null"))
 rr <- function(x0, x1, y0, y1, r = 0.035, n = 7) {
   a <- seq(0, pi / 2, length.out = n)
   data.frame(x = c(x1 - r + r * cos(a), x0 + r - r * sin(a), x0 + r - r * cos(a), x1 - r + r * sin(a)),
@@ -62,15 +77,18 @@ box <- function(x0, x1, y0, y1, title, sub = NULL, fill = "white", col = INK2, l
   xc <- if (hj == 0) x0 + 0.06 else (x0 + x1) / 2; yc <- (y0 + y1) / 2
   L <- list(geom_polygon(data = rr(x0, x1, y0, y1), aes(x, y), fill = fill, colour = col, linewidth = 0.35, linetype = lty, inherit.aes = FALSE))
   ns <- if (is.null(sub)) 0 else length(strsplit(sub, "\n")[[1]])
-  th <- ts / 72 * 1.05; sh <- ss / 72 * 1.12; H <- th + if (ns > 0) 0.03 + ns * sh else 0
-  L <- c(L, annotate("text", xc, yc + H / 2, label = title, size = pt(ts), fontface = "bold", family = FONT, colour = INK, vjust = 1, hjust = hj, lineheight = 0.95))
-  if (ns > 0) L <- c(L, annotate("text", xc, yc + H / 2 - th - 0.03, label = sub, size = pt(ss), family = FONT, colour = INK2, vjust = 1, hjust = hj, lineheight = 1.0))
+  # the block is measured in points, where the type is: a line box is one font size tall and grid sets successive lines
+  # 1.2 sizes apart, so the title's box plus its leading is 1.35 sizes. Centring the block on the box then needs only the
+  # point-to-unit conversion, and both gaps come out equal instead of 2.4 pt above the text and 5.0 pt below it.
+  th <- ts * 1.35; blk <- if (ns > 0) th + ss + (ns - 1) * ss * 1.2 else ts
+  L <- c(L, annotate("text", xc, yc + U(blk) / 2, label = title, size = pt(ts), fontface = "bold", family = FONT, colour = INK, vjust = 1, hjust = hj, lineheight = 0.95))
+  if (ns > 0) L <- c(L, annotate("text", xc, yc + U(blk) / 2 - U(th), label = sub, size = pt(ss), family = FONT, colour = INK2, vjust = 1, hjust = hj, lineheight = 1.0))
   L
 }
 arr <- function(x0, y0, x1, y1, col = INK2) annotate("segment", x = x0, y = y0, xend = x1, yend = y1, colour = col, linewidth = 0.4,
                                                       arrow = arrow(length = unit(3.2, "pt"), type = "closed", angle = 25))
 seg <- function(x0, y0, x1, y1, col = INK2) annotate("segment", x = x0, y = y0, xend = x1, yend = y1, colour = col, linewidth = 0.4)
-canvas <- function(w, h) ggplot() + coord_cartesian(xlim = c(0, w), ylim = c(0, h), expand = FALSE, clip = "off") + theme_void(base_family = FONT) +
+canvas <- function(w, h) ggplot() + coord_fixed(ratio = 1, xlim = c(0, w), ylim = c(0, h), expand = FALSE, clip = "off") + theme_void(base_family = FONT) +
   theme(plot.margin = margin(0, 0, 0, 0), plot.tag = element_text(size = 9, face = "bold"), plot.tag.position = c(0.004, 0.985))
 range_row <- function(x0, x1, y, lo, q1, q3, hi, med, s, col) list(   # mini healthy-range glyph for the schematics
   annotate("rect", xmin = lo, xmax = hi, ymin = y - 0.035, ymax = y + 0.035, fill = BAND),
@@ -96,23 +114,27 @@ fig1 <- function() {
     seg(4.9, 0.755, 4.99, 0.755) + seg(4.9, 0.275, 4.99, 0.275) + seg(4.99, 0.275, 4.99, 0.755) + arr(4.99, 0.515, 5.11, 0.515) +
     geom_polygon(data = rr(5.12, 7.13, 0.08, 0.95), aes(x, y), fill = "white", colour = INK2, linewidth = 0.35) +
     annotate("text", 5.21, 0.925, label = "report for every feature", size = pt(6.8), fontface = "bold", family = FONT, colour = INK, hjust = 0, vjust = 1)
-  rows <- data.frame(y = c(0.665, 0.535, 0.27), lab = c("Oscillospiraceae", "Streptococcaceae", "lysine racemase"), s = c(6.03, 6.33, 6.74),
-                     col = c(LOW, WITHIN, HIGH), call = c("low", "within", "high"))
-  a <- a + annotate("segment", x = 5.21, xend = 7.04, y = 0.425, yend = 0.425, colour = GRID, linewidth = 0.5) +
-    annotate("text", 5.21, 0.765, label = "taxa", hjust = 0, size = pt(5.8), family = FONT, colour = MUTED, fontface = "italic") +
-    annotate("text", 5.21, 0.36, label = "genes and pathways", hjust = 0, size = pt(5.8), family = FONT, colour = MUTED, fontface = "italic")
+  # the eight items of the report card are spaced so that no two 6 pt lines come within a point of one another now that a
+  # canvas unit is 70.4 rather than 84.8 points tall (see the schematic helpers)
+  rows <- data.frame(y = c(0.655, 0.530, 0.265), lab = c("Oscillospiraceae", "Streptococcaceae", "lysine racemase"), s = c(6.03, 6.33, 6.74),
+                     col = c(LOW, WITHIN, HIGH), call = c("low", "within", "high"), face = c("italic", "italic", "plain"))
+  a <- a + annotate("segment", x = 5.21, xend = 7.04, y = 0.445, yend = 0.445, colour = GRID, linewidth = 0.5) +
+    annotate("text", 5.21, 0.765, label = "taxa", hjust = 0, size = pt(6.0), family = FONT, colour = MUTED, fontface = "italic") +
+    annotate("text", 5.21, 0.375, label = "genes and pathways", hjust = 0, size = pt(6.0), family = FONT, colour = MUTED, fontface = "italic")
   for (i in 1:3) a <- a + range_row(6.1, 6.65, rows$y[i], 6.1, 6.27, 6.47, 6.65, 6.37, rows$s[i], rows$col[i]) +
-    annotate("text", 5.21, rows$y[i], label = rows$lab[i], hjust = 0, size = pt(6.2), family = FONT, colour = INK2) +
+    annotate("text", 5.21, rows$y[i], label = rows$lab[i], hjust = 0, size = pt(6.2), family = FONT, colour = INK2, fontface = rows$face[i]) +
     annotate("text", 6.83, rows$y[i], label = rows$call[i], hjust = 0, size = pt(6.2), family = FONT, colour = rows$col[i], fontface = "bold")
-  a <- a + annotate("text", 6.375, 0.125, label = "healthy range", size = pt(5.8), family = FONT, colour = MUTED, vjust = 0)
+  a <- a + annotate("text", 6.375, 0.115, label = "healthy range", size = pt(6.0), family = FONT, colour = MUTED, vjust = 0)
 
   # b: how one feature is placed
   m <- jnum(file.path(D, "f1_density_meta.json")); dz <- read_csv(file.path(D, "f1_density.csv"))
   dd <- density(dz$x, adjust = 1.1, n = 1024); dd <- data.frame(x = dd$x, y = dd$y / max(dd$y)); dd <- dd[dd$x > -10.5 & dd$x < 5.5, ]
   inb <- dd[dd$x >= m[["2_5"]] & dd$x <= m[["97_5"]], ]
   b <- ggplot(dd, aes(x, y)) + geom_area(data = inb, fill = BAND) + geom_line(colour = INK2, linewidth = 0.4) +
-    annotate("segment", x = c(m[["2_5"]], m[["97_5"]]), xend = c(m[["2_5"]], m[["97_5"]]), y = 0, yend = 1.08, colour = MUTED, linewidth = 0.3, linetype = "22") +
-    annotate("text", x = c(m[["2_5"]], m[["97_5"]]), y = 1.11, label = c("2.5th", "97.5th"), size = pt(6), family = FONT, colour = INK2, vjust = 0) +
+    # the percentile ticks sit a little below the top of the plotting window, which keeps them clear of the second line of
+    # the annotation that labels the sample; the two shared a column and their glyphs interleaved
+    annotate("segment", x = c(m[["2_5"]], m[["97_5"]]), xend = c(m[["2_5"]], m[["97_5"]]), y = 0, yend = 1.04, colour = MUTED, linewidth = 0.3, linetype = "22") +
+    annotate("text", x = c(m[["2_5"]], m[["97_5"]]), y = 1.07, label = c("2.5th", "97.5th"), size = pt(6), family = FONT, colour = INK2, vjust = 0) +
     annotate("text", x = -0.6, y = 0.3, label = "healthy\nrange", size = pt(6.2), family = FONT, colour = INK2, lineheight = 0.95) +
     annotate("segment", x = m$sample, xend = m$sample, y = 0, yend = 1.33, colour = LOW, linewidth = 0.6) +
     annotate("point", x = m$sample, y = 0, colour = "white", fill = LOW, shape = 21, size = 2.2, stroke = 0.3) +
@@ -120,7 +142,8 @@ fig1 <- function() {
              size = pt(6.2), family = FONT, colour = LOW, lineheight = 0.95) +
     scale_x_continuous(breaks = c(-8, -4, 0, 4), labels = log2_axis, limits = c(-10.5, 5.5), expand = c(0, 0)) +
     scale_y_continuous(limits = c(0, 1.62), expand = c(0, 0)) +
-    labs(x = "relative to the typical healthy adult", y = NULL, title = "placing one feature: Oscillospiraceae") +
+    labs(x = "relative to the typical healthy adult", y = NULL,
+         title = expression(bold("placing one feature: ") * bolditalic("Oscillospiraceae"))) +
     theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), panel.grid = element_blank(), panel.grid.major = element_blank())
 
   # c: the report for the same sample (bars clipped to the axis range)
@@ -145,17 +168,23 @@ fig1 <- function() {
     geom_text(aes(x = XL[2] + 0.4, label = txt), hjust = 0, size = pt(6.2), family = FONT, colour = INK2) +
     facet_grid(layer ~ ., scales = "free_y", space = "free_y", switch = "y") +
     scale_fill_manual(values = c(low = LOW, high = HIGH, within = WITHIN), guide = "none") +
+    scale_y_discrete(labels = ital_lab(as.character(r$label[r$layer == "taxa"]))) +
     scale_x_continuous(breaks = c(-12, -8, -4, 0, 4, 8), labels = log2_axis, expand = c(0, 0)) +
     coord_cartesian(xlim = XL, clip = "off") +
     labs(x = "relative to the typical healthy adult (median)", y = NULL,
          title = expression(bold("report for one ") * bolditalic("C. difficile") * bold(" infection patient (excerpt)"))) +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5),
-          strip.placement = "outside", strip.text.y.left = element_text(angle = 90, hjust = 0.5, size = 6.2, face = "bold", colour = INK2),
+          # the two-row gene facet gives its rotated label a band shorter than the word, and "genes" was being clipped to
+          # "jene"; strip.clip = "off" lets the point or so of overflow fall in the panel spacing
+          strip.placement = "outside", strip.clip = "off",
+          strip.text.y.left = element_text(angle = 90, hjust = 0.5, size = 6.2, face = "bold", colour = INK2),
           panel.spacing.y = unit(5, "pt"),
           plot.margin = margin(2, 122, 2, 2))
-  p <- wrap_elements(full = a) / ((b | c_) + plot_layout(widths = c(1, 1.32))) + plot_layout(heights = c(1.02, 1.50)) + plot_annotation(tag_levels = "a") &
-    theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig1", DOUBLE, 2.62)
+  # the schematic row is pinned to the inches its canvas needs rather than given a share of the figure: a relative height
+  # rescales the coordinate system but not the pt-sized text, and the box borders then cut through their own last line
+  p <- wrap_elements(full = a) / ((b | c_) + plot_layout(widths = c(1, 1.32))) + plot_layout(heights = pin_row(H)) +
+    plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
+  save_fig(p, "fig1", DOUBLE, 2.84)
 }
 
 # ======================================================================================== Figure 2: pipelines, curation, checks
@@ -181,7 +210,9 @@ fig2 <- function() {
   # b: curation, from public resource to baseline and evaluation sets
   fu <- read_csv(file.path(D, "f2_funnel.csv"))
   ev <- read_tsv(file.path(P, "results/s8/loso_auroc.tsv")) %>% filter(study != "POOLED", feature_set == "reference_relative")
-  cc <- read_tsv(file.path(P, "results/s14/disease_strata_B_balance.tsv"))   # the 15 studies with >= 15 cases and 15 controls (14 enter the benchmark)
+  # the 15 case/control studies of the read pipeline; the 14 with >= 20 cases and >= 20 controls enter the benchmark
+  # (SankaranarayananK_2015, 19 cases / 18 controls, does not), but all 15 are counted here as curated samples
+  cc <- read_tsv(file.path(P, "results/s14/disease_strata_B_balance.tsv"))
   stopifnot(sum(ev$n_test) == 2294, sum(cc$n_case + cc$n_control) == 1437)
   extra <- tibble(pipeline = c("Assembly (MGnify v5)", "Assembly (MGnify v5)", "Read (cMD3)", "Read (cMD3)"), step = c(6, 7, 6, 7),
                   label = rep(c("held-out healthy adults", "case/control studies"), 2), n = c(233, sum(ev$n_test), 317, sum(cc$n_case + cc$n_control)),
@@ -195,30 +226,41 @@ fig2 <- function() {
   fu$key <- factor(fu$key, rev(fu$key[order(fu$pipeline, fu$step)]))
   fills <- c("Assembly (MGnify v5) screen" = PA_BG, "Assembly (MGnify v5) baseline" = PA, "Assembly (MGnify v5) set aside" = "#9CC5C9",
              "Read (cMD3) screen" = PB_BG, "Read (cMD3) baseline" = PB, "Read (cMD3) set aside" = "#DCC08C")
+  # the bottom two rows of each facet are the sets held out of the baseline rather than screened out on the way to it, so
+  # a rule separates them from the funnel proper: they are siblings of the baseline and one of them is the longer bar
   b <- ggplot(fu, aes(y = key, x = n, fill = pal)) + geom_col(width = 0.72, colour = NA) +
+    geom_hline(yintercept = 2.5, colour = AXIS, linewidth = 0.25, linetype = "22") +
     geom_text(aes(label = lab), hjust = -0.08, size = pt(6), family = FONT, colour = INK2) +
     facet_wrap(~pipeline, ncol = 1, scales = "free_y") +
-    scale_fill_manual(values = fills, guide = "none") + scale_y_discrete(labels = setNames(fu$label, fu$key)) +
+    scale_fill_manual(values = fills, guide = "none") +
+    # thirteen rows of 6 pt counts need 5.7 pt of pitch before the parentheses of consecutive labels touch wherever two
+    # bars end at a similar x, which they do five times over in the assembly funnel. The pitch is bought inside the panel
+    # rather than from the figure's height: a tighter discrete expansion, closer facets and leaner strips.
+    scale_y_discrete(labels = setNames(fu$label, fu$key), expand = expansion(add = 0.45)) +
     scale_x_continuous(labels = function(x) ifelse(x == 0, "0", paste0(x / 1000, "k")), limits = c(0, 33500), breaks = c(0, 10000, 20000), expand = c(0, 0)) +
     labs(x = "samples (studies)", y = NULL, title = "curation") +
-    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(size = 6.2, colour = INK), strip.text = element_text(size = 6.5, face = "plain", colour = INK2),
-          panel.spacing.y = unit(7, "pt"))
+    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(size = 6.2, colour = INK),
+          strip.text = element_text(size = 6.5, face = "plain", colour = INK2, margin = margin(1, 0, 1, 0)),
+          panel.spacing.y = unit(3, "pt"))
 
   # c: calibration, share of features outside the range in healthy samples the baseline never saw
   ca <- read_csv(file.path(D, "f2_calibration.csv")) %>% mutate(frac = 100 * frac, layer = factor(layer, rev(LAYERS))) %>% filter(!is.na(layer)) %>%
     mutate(kind = factor(kind, c("held-out cohort", "baseline study left out")),
            pipeline = recode(pipeline, "Assembly (MGnify v5)" = "assembly pipeline", "Read (cMD3)" = "read pipeline"))
   med <- ca %>% group_by(pipeline, layer) %>% summarise(m = median(frac))
-  hz <- ca %>% filter(unit == "PRJEB49206", layer == "Family")
+  # The Hadza point used to carry a "Hadza study (Fig. 5)" label, which the caption names anyway. A row of this panel is
+  # not quite 6 pt, every row is occupied from 3 to 20 % and the family row is the topmost one, so the only y at which a
+  # 6 pt line clears both its own circle and the rest of the row lies outside the panel; buying the room from the scale
+  # would have left a tenth of each facet blank. The lone point at 20 % against a next-highest 13 % is unmistakable.
   c_ <- ggplot(ca, aes(x = frac, y = layer)) + geom_vline(xintercept = 5, colour = MUTED, linewidth = 0.35, linetype = "22") +
     geom_point(aes(shape = kind), position = position_jitter(height = 0.18, width = 0, seed = 1), size = 0.9, colour = INK2, stroke = 0.35, alpha = 0.8) +
     geom_point(data = med, aes(x = m), shape = 124, size = 3.2, colour = ACC) +
-    geom_text(data = hz, aes(label = "Hadza study (Fig. 5)"), nudge_y = 0.62, size = pt(6), family = FONT, colour = INK2, hjust = 0.75) +
     facet_wrap(~pipeline, ncol = 1, scales = "free_y") + scale_shape_manual(values = c(16, 1), name = NULL) +
-    scale_y_discrete(expand = expansion(add = c(0.6, 1.0))) +
+    scale_y_discrete(expand = expansion(add = c(0.45, 0.7))) +
     scale_x_continuous(limits = c(0, 25), breaks = c(0, 5, 10, 15, 20, 25), labels = function(x) paste0(x, "%"), expand = c(0, 0.3)) +
     labs(x = "features outside the healthy range", y = NULL, title = "calibration (5 % expected)") +
-    theme(legend.position = "bottom", legend.text = element_text(size = 6), panel.grid.major.y = element_blank(), strip.text = element_text(size = 6.5, face = "plain", colour = INK2))
+    theme(legend.position = "bottom", legend.text = element_text(size = 6), panel.grid.major.y = element_blank(),
+          axis.text.y = element_text(size = 6.2, colour = INK2), strip.text = element_text(size = 6.5, face = "plain", colour = INK2))
 
   # d: the pipelines reproduce the source percentiles from raw reads
   fi <- read_csv(file.path(D, "f2_fidelity.csv")) %>% mutate(layer = factor(layer, rev(LAYERS))) %>% filter(!is.na(layer)) %>%
@@ -231,38 +273,55 @@ fig2 <- function() {
     facet_wrap(~pipeline, ncol = 1, scales = "free_y") +
     scale_x_continuous(limits = c(0.4, 1.0), breaks = c(0.4, 0.6, 0.8, 1.0), expand = c(0, 0.01)) +
     labs(x = "Spearman ρ with source percentiles", y = NULL, title = "reproduced from raw reads") +
-    theme(panel.grid.major.y = element_blank(), strip.text = element_text(size = 6.5, face = "plain", colour = INK2))
-  p <- wrap_elements(full = a) / (b | c_ | d) + plot_layout(heights = c(1.06, 2.45)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig2", DOUBLE, 3.05)
+    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(size = 6.2, colour = INK2),
+          strip.text = element_text(size = 6.5, face = "plain", colour = INK2))
+  p <- wrap_elements(full = a) / (b | c_ | d) + plot_layout(heights = pin_row(H)) +   # see fig1: inches, not a share
+    plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
+  save_fig(p, "fig2", DOUBLE, 3.37)
 }
 
 # ======================================================================================== Figure 3: disease benchmark
 fig3 <- function() {
   au <- read_csv(file.path(D, "f3_auroc.csv"))
+  # prep.py now names the three assembly feature sets at source (reference_relative = taxa and genes together, plus the
+  # taxonomy-only and genes-only ablations from results/s8), so no relabelling is needed here
   # row labels drop the tool name: the violet bars are checkGM output, the greys are the comparators
   au$method <- recode(au$method, "GMHI (genus approx.)" = "GMHI, genus approx.", "GMHI (published)" = "GMHI", "GMWI2 (published)" = "GMWI2",
                       "Alpha diversity" = "alpha diversity", "Raw abundances" = "raw abundances",
                       "checkGM health score" = "health score", "checkGM percentiles" = "percentiles, taxa",
                       "checkGM percentiles, genes only" = "percentiles, genes", "checkGM percentiles, taxa + genes" = "percentiles, both",
                       "same score on raw abundances" = "same score, raw input")
-  lv <- c("assembly pipeline\n11 studies", "read pipeline\n14 studies", "read pipeline\n4 studies GMWI2 never saw")
+  # "14 of 15" rather than "14": fifteen case/control studies are curated in Fig. 2b, and the one with fewer than 20
+  # cases and 20 controls (SankaranarayananK_2015) is held out of the benchmark, which the panel titles otherwise hide
+  lv <- c("assembly pipeline\n11 studies", "read pipeline\n14 of 15 studies", "read pipeline\n4 studies GMWI2 never saw")
   au$pipeline <- factor(recode(au$pipeline, "Assembly pipeline (11 studies)" = lv[1], "Read pipeline (14 studies)" = lv[2],
                                "Read pipeline, 4 studies GMWI2 never saw" = lv[3]), lv)
   OURS <- c("health score", "percentiles, taxa", "percentiles, genes", "percentiles, both")
   s <- au %>% group_by(pipeline, method) %>% summarise(m = mean(auroc), n = n()) %>% ungroup() %>%
     mutate(lab = ifelse(method == "GMWI2" & pipeline == lv[2], "GMWI2\u2020", method), key = paste(pipeline, method),
            grp = ifelse(method %in% OURS, "checkGM", ifelse(method == "GMWI2", "GMWI2", "other")))
-  s <- s %>% arrange(pipeline, m) %>% mutate(key = factor(key, key))
+  # facet_wrap gives every panel the same height, so the four-method assembly panel would draw its bars half again as
+  # thick as the nine-method read panels for the same quantity on the same axis. Blank rows pad the short panel to nine,
+  # and are carried by geom_blank alone so that nothing is drawn and no layer sees a missing value.
+  s <- s %>% arrange(pipeline, m) %>% mutate(pipeline = as.character(pipeline))
+  npad <- max(table(s$pipeline)) - table(s$pipeline)
+  pad <- bind_rows(lapply(names(npad)[npad > 0], function(pl)
+    tibble(pipeline = pl, key = paste(pl, "pad", seq_len(npad[[pl]])), lab = "")))
+  s <- bind_rows(s, pad) %>% mutate(pipeline = factor(pipeline, lv)) %>% arrange(pipeline, is.na(m), m) %>% mutate(key = factor(key, key))
+  sr <- filter(s, !is.na(m))
   au <- au %>% mutate(key = factor(paste(pipeline, method), levels(s$key)))
-  g <- ggplot(s, aes(y = key)) + geom_vline(xintercept = 0.5, colour = MUTED, linewidth = 0.35) +
+  g <- ggplot(sr, aes(y = key)) + geom_blank(data = s, aes(y = key)) + geom_vline(xintercept = 0.5, colour = MUTED, linewidth = 0.35) +
     geom_tile(aes(x = (0.5 + m) / 2, width = abs(m - 0.5), fill = grp), height = 0.72) +
     geom_point(data = au, aes(x = auroc), position = position_jitter(height = 0.17, width = 0, seed = 2), size = 0.6, colour = INK, alpha = 0.5, stroke = 0) +
-    geom_text(aes(x = 1.045, label = sprintf("%.2f", m), fontface = ifelse(grp == "checkGM", "bold", "plain")), hjust = 1, size = pt(6.4), family = FONT, colour = INK) +
+    geom_text(aes(x = 1.08, label = sprintf("%.2f", m), fontface = ifelse(grp == "checkGM", "bold", "plain")), hjust = 1, size = pt(6.4), family = FONT, colour = INK) +
     facet_wrap(~pipeline, nrow = 1, scales = "free_y") +
     scale_fill_manual(values = c(checkGM = ACC, GMWI2 = GREY_D, other = GREY_L), name = NULL,
                       labels = c(checkGM = "checkGM output", GMWI2 = "GMWI2", other = "other comparators"), breaks = c("checkGM", "GMWI2", "other")) +
     scale_y_discrete(labels = setNames(s$lab, s$key)) +
-    scale_x_continuous(limits = c(0.28, 1.05), breaks = c(0.4, 0.6, 0.8, 1.0), expand = c(0, 0)) +
+    # the lower limit reaches the smallest study AUROC (alpha diversity on GuptaA_2019, 0.17): clipping the axis would
+    # drop a dot while its mean bar still counted it. The upper limit leaves the mean labels a column of their own,
+    # clear of the largest study AUROC (0.908, the health score on one read-pipeline study), whose dot the label grazed
+    scale_x_continuous(limits = c(0.15, 1.09), breaks = c(0.2, 0.4, 0.6, 0.8, 1.0), expand = c(0, 0)) +
     labs(x = "AUROC in studies left out of training (bar = mean, dots = studies)", y = NULL) +
     guides(fill = guide_legend(keywidth = unit(6, "pt"), keyheight = unit(6, "pt"))) +
     theme(panel.grid.major.y = element_blank(), strip.text = element_text(size = 6.5, face = "bold", colour = INK, hjust = 0.5, margin = margin(1, 0, 3, 0)),
@@ -272,19 +331,23 @@ fig3 <- function() {
 }
 
 # ---- "share outside the range" bars shared by Figs 4a and 5b: every bar grows rightward from zero and the panel is split by
-# direction, so no half of the axis is left empty
+# direction, so no half of the axis is left empty. The bars are stacked shares, and the share the text quotes for a row is the
+# one in that row's own direction, so that segment is drawn first, flush against the axis, and its far end is where the
+# comparator marker for the same quantity sits. `d` therefore carries a `dir` column naming the row's direction.
 CALLS <- c("below the range" = LOW, "expected but missing" = LOW_L, "above the range" = HIGH)
-call_bars <- function(d) bind_rows(d %>% transmute(name, side, v = low, what = "below the range"),
-                                   d %>% transmute(name, side, v = missing, what = "expected but missing"),
-                                   d %>% transmute(name, side, v = high, what = "above the range")) %>%
-  filter(v > 0) %>% mutate(what = factor(what, names(CALLS))) %>% group_by(name) %>%
-  arrange(what, .by_group = TRUE) %>% mutate(xmax = 100 * cumsum(v), xmin = xmax - 100 * v, x = (xmin + xmax) / 2, w = xmax - xmin) %>% ungroup()
+call_bars <- function(d) bind_rows(d %>% transmute(name, side, dir, v = low, what = "below the range"),
+                                   d %>% transmute(name, side, dir, v = missing, what = "expected but missing"),
+                                   d %>% transmute(name, side, dir, v = high, what = "above the range")) %>%
+  filter(v > 0) %>% mutate(what = factor(what, names(CALLS)),
+                           ord = as.integer(what) - 10 * (dir == "above" & what == "above the range")) %>% group_by(name) %>%
+  arrange(ord, .by_group = TRUE) %>% mutate(xmax = 100 * cumsum(v), xmin = xmax - 100 * v, x = (xmin + xmax) / 2, w = xmax - xmin) %>%
+  ungroup() %>% select(-ord)
 
 # ======================================================================================== Figure 4: known disease associations
 cohort_lab <- function(s) sub("^([A-Z][a-z]+)[A-Z]+_([0-9]{4})_?([ab]?)$", "\\1 \\2\\3", s)
 fig4 <- function() {
   cd <- read_csv(file.path(D, "f4_cdi_calls.csv")) %>% rename(missing = expected_but_missing) %>%
-    mutate(side = factor(ifelse(side == "lost", "lost", "gained"), c("lost", "gained")))
+    mutate(side = factor(ifelse(side == "lost", "lost", "gained"), c("lost", "gained")), dir = ifelse(side == "gained", "above", "below"))
   cs <- filter(cd, group == "cases"); ct <- filter(cd, group == "controls")
   ordr <- c(cs %>% filter(side == "lost") %>% arrange(low + missing) %>% pull(name), cs %>% filter(side == "gained") %>% arrange(high) %>% pull(name))
   bars <- call_bars(cs) %>% mutate(name = factor(name, ordr))
@@ -294,7 +357,10 @@ fig4 <- function() {
     geom_point(data = mk, aes(x = 100 * x, shape = "controls (n = 14)"), size = 1.5, colour = INK, fill = "white", stroke = 0.45) +
     facet_grid(side ~ ., scales = "free_y", space = "free_y") +
     scale_fill_manual(values = CALLS, name = NULL) + scale_shape_manual(values = c("controls (n = 14)" = 23), name = NULL) +
-    scale_x_continuous(limits = c(0, 68), breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = c(0, 0)) +
+    scale_y_discrete(labels = ital_lab(ordr)) +
+    # a hair of left pad, so that the six control markers that sit at exactly 0 % are drawn whole rather than bisected by
+    # the panel border; those markers carry the claim that three families rise in no control at all
+    scale_x_continuous(limits = c(0, 68), breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0.018, 0))) +
     labs(x = "patients outside the healthy range (cases, n = 56)", y = NULL,
          title = expression(bolditalic("C. difficile") * bold(" infection, one cohort (assembly pipeline)"))) +
     guides(fill = guide_legend(order = 1, nrow = 1, keywidth = unit(6, "pt"), keyheight = unit(6, "pt")), shape = guide_legend(order = 2)) +
@@ -314,33 +380,53 @@ fig4 <- function() {
     x <- sub("^methylerythritol phosphate pathway II$", "methylerythritol phosphate pathway", x)
     x
   }
-  keep_n <- c(Family = 5, Genus = 6)                        # room for the function rows; the full lists are in the atlas tables
+  # room for the function rows; the full lists are in the atlas tables. Seven genera rather than six, because Lachnospira
+  # (-24.76) and Fusicatenibacter (-24.57) are quoted together in the text and are 0.19 points apart in the ranking.
+  keep_n <- c(Family = 5, Genus = 7)
   cr <- read_csv(file.path(D, "f4_crc.csv")) %>% filter(rank != "Species")
-  topt <- cr %>% distinct(rank, name, median_shift) %>% group_by(rank) %>% slice_min(median_shift, n = 6) %>% ungroup() %>%
-    filter(rank != "Family" | name %in% (cr %>% distinct(rank, name, median_shift) %>% filter(rank == "Family") %>% slice_min(median_shift, n = 5) %>% pull(name)))
+  topt <- cr %>% distinct(rank, name, median_shift) %>% group_by(rank) %>% slice_min(median_shift, n = keep_n[["Genus"]]) %>% ungroup() %>%
+    filter(rank != "Family" | name %in% (cr %>% distinct(rank, name, median_shift) %>% filter(rank == "Family") %>%
+                                           slice_min(median_shift, n = keep_n[["Family"]]) %>% pull(name)))
   cr <- filter(cr, name %in% topt$name)
   fn <- read_csv(file.path(D, "f4_crc_function.csv")) %>% mutate(name = short(name)) %>%
     group_by(rank) %>% filter(name %in% (distinct(., name, median_shift) %>% slice_min(median_shift, n = 5) %>% pull(name))) %>% ungroup()
   cr <- bind_rows(cr %>% mutate(rank = ifelse(rank == "Family", "families", "genera")),
                   fn %>% mutate(rank = ifelse(rank == "gene families", "genes", rank))) %>% mutate(cohort = cohort_lab(study))
-  ital <- cr$name[cr$rank == "genera"]
+  ital <- cr$name[cr$rank %in% c("families", "genera")]
   ordt <- cr %>% distinct(rank, name, median_shift) %>% mutate(rank = factor(rank, c("families", "genera", "pathways", "genes"))) %>% arrange(rank, desc(median_shift))
   cr$name <- factor(cr$name, ordt$name); cr$rank <- factor(cr$rank, c("families", "genera", "pathways", "genes"))
   cr$cohort <- factor(cr$cohort, sort(unique(cr$cohort)))
-  ylab_it <- function(br) as.expression(lapply(br, function(n) if (n %in% ital) bquote(italic(.(n))) else bquote(.(n))))
   sg <- filter(cr, sig)
+  # the grid is not complete: a feature consistent across cohorts was not necessarily scored in every one of them. Those
+  # cells are drawn as empty dashed outlines, so that "not scored here" cannot be mistaken for the near-white of no shift.
+  gaps <- cr %>% distinct(rank, name) %>% crossing(cohort = levels(cr$cohort)) %>%
+    anti_join(cr %>% select(rank, name, cohort), by = c("rank", "name", "cohort")) %>%
+    mutate(rank = factor(rank, levels(cr$rank)), name = factor(name, levels(cr$name)), cohort = factor(cohort, levels(cr$cohort)))
   b <- ggplot(cr, aes(x = cohort, y = name, fill = shift)) + geom_tile(colour = "white", linewidth = 0.5) +
-    geom_point(data = sg, size = 0.75, colour = ifelse(abs(sg$shift) > 30, "white", INK)) +
+    geom_tile(data = gaps, aes(x = cohort, y = name, colour = "not scored"), inherit.aes = FALSE, fill = "white", linewidth = 0.25, linetype = "22") +
+    # one colour for every dot. On this ramp a black dot is the more legible of the two on all but the darkest cell the
+    # table produces: the contrast against black runs from 18.8:1 at no shift to 5.0:1 at 60 points and 4.1:1 at the
+    # single 69.2-point cell, where white reaches 5.2:1. A threshold anywhere inside that range buys a tenth of a stop of
+    # contrast on a handful of cells and pays for it by putting a white dot and a black dot on two cells of the same
+    # shade in the same column, which reads as though the colour of the dot encoded something.
+    geom_point(data = sg, size = 0.75, colour = INK) +
     facet_grid(rank ~ ., scales = "free_y", space = "free_y") +
-    scale_fill_gradient2(low = LOW, mid = "#F2F2F2", high = HIGH, midpoint = 0, limits = c(-50, 50), oob = squish, breaks = c(-50, -25, 0, 25, 50),
-                         labels = c(paste0(MINUS, "50"), paste0(MINUS, "25"), "0", "25", "50"), name = "cases − controls\n(percentile points)") +
-    scale_x_discrete(expand = c(0, 0)) + scale_y_discrete(expand = c(0, 0), labels = ylab_it) +
+    # the limits reach the largest shift in the table (69.2 points), so nothing is quietly flattened against the end of the
+    # ramp and a given number of percentile points means the same colour in every column and on every layer
+    scale_fill_gradient2(low = LOW, mid = "#F2F2F2", high = HIGH, midpoint = 0, limits = c(-70, 70), oob = squish, breaks = c(-60, -30, 0, 30, 60),
+                         labels = c(paste0(MINUS, "60"), paste0(MINUS, "30"), "0", "30", "60"), name = "cases − controls\n(percentile points)") +
+    scale_colour_manual(values = c("not scored" = AXIS), name = NULL) +
+    scale_x_discrete(expand = c(0, 0)) + scale_y_discrete(expand = c(0, 0), labels = ital_lab(ital)) +
     labs(x = NULL, y = NULL, title = "colorectal cancer, nine cohorts (read pipeline)") +
-    guides(fill = guide_colourbar(barwidth = unit(4.5, "pt"), barheight = unit(60, "pt"), ticks.colour = "white")) +
+    # the dashed cells earn a key of their own: nothing else in the figure or its caption would tell a reader that a
+    # dashed outline is a cohort in which the feature was not scored rather than one in which it did not shift
+    guides(fill = guide_colourbar(order = 1, barwidth = unit(4.5, "pt"), barheight = unit(60, "pt"), ticks.colour = "white"),
+           colour = guide_legend(order = 2, keywidth = unit(6, "pt"), keyheight = unit(6, "pt"),
+                                 override.aes = list(fill = "white", linetype = "22", linewidth = 0.25))) +
     theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1, size = 6.2, colour = INK), panel.grid.major = element_blank(), axis.line = element_blank(),
           axis.ticks = element_blank(), strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5),
           axis.text.y = element_text(colour = INK, size = 6.2), legend.title = element_text(size = 6, colour = INK2), legend.position = "right",
-          panel.spacing.y = unit(2.5, "pt"))
+          legend.text = element_text(size = 6), legend.spacing.y = unit(4, "pt"), panel.spacing.y = unit(2.5, "pt"))
   p <- (a | b) + plot_layout(widths = c(0.86, 1.0)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
   save_fig(p, "fig4", DOUBLE, 2.95)
 }
@@ -356,15 +442,20 @@ fig5 <- function() {
   md <- fr %>% group_by(layer, g) %>% summarise(m = median(pct))
   a <- ggplot(fr, aes(x = pct, y = g)) + geom_vline(xintercept = 5, colour = MUTED, linewidth = 0.35, linetype = "22") +
     geom_boxplot(aes(fill = g), width = 0.62, outlier.size = 0.2, outlier.colour = GREY_L, outlier.stroke = 0, linewidth = 0.3, colour = INK2, median.colour = INK, median.linewidth = 0.7) +
-    geom_text(data = md, aes(x = 46.5, label = paste0(sprintf("%.1f", m), "%")), hjust = 0, size = pt(6.4), family = FONT, colour = INK) +
+    geom_text(data = md, aes(x = 64.5, label = paste0(sprintf("%.1f", m), "%")), hjust = 0, size = pt(6.4), family = FONT, colour = INK) +
     facet_wrap(~layer, ncol = 1) + scale_fill_manual(values = setNames(c("#8A8274", "#C6C0B0", BAND), rev(st)), guide = "none") +
-    scale_x_continuous(breaks = c(0, 10, 20, 30, 40), labels = function(x) paste0(x, "%"), expand = c(0, 0)) +
-    coord_cartesian(xlim = c(0, 45), clip = "off") +
-    labs(x = "features outside the healthy range, per sample", y = NULL, title = "share of each sample outside the range") +
+    scale_x_continuous(breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = c(0, 0)) +
+    # the window reaches the largest sample (61.2 %): a narrower one let the boxplot's own outliers escape into the right
+    # margin, where they had no axis under them and read as stray ink
+    coord_cartesian(xlim = c(0, 63), clip = "off") +
+    # the dashed rule is named in the title, as it is in Fig. 2c, rather than labelled inside the panel: at the only y
+    # that cleared the top box the label fell outside the panel altogether, into the facet strip's band, where it read as
+    # a third item in the strip's own header row instead of as a note on the rule
+    labs(x = "features outside the healthy range, per sample", y = NULL, title = "share of each sample outside the range (5 % expected)") +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.4, lineheight = 0.95),
-          strip.text = element_text(size = 6.5, face = "plain", colour = INK2), plot.margin = margin(2, 22, 2, 2))
-  a <- a + geom_text(data = data.frame(layer = factor("bacterial families", levels(fr$layer)), g = factor(st[[3]], levels(fr$g))), inherit.aes = FALSE,
-                     aes(x = 46.5, y = 3.62, label = "median"), hjust = 0, size = pt(6), colour = MUTED, family = FONT)
+          strip.text = element_text(size = 6.5, face = "plain", colour = INK2), plot.margin = margin(2, 26, 2, 2))
+  hdr <- data.frame(layer = factor("bacterial families", levels(fr$layer)), g = factor(st[[3]], levels(fr$g)))
+  a <- a + geom_text(data = hdr, inherit.aes = FALSE, aes(x = 64.5, y = 3.62, label = "median"), hjust = 0, size = pt(6), colour = MUTED, family = FONT)
 
   # b: genera and gene families together, so the panel shows both layers of the output. Bars grow from zero; colour carries the
   # direction, so no half of the axis is left empty. Genera are italic, gene families roman.
@@ -381,21 +472,31 @@ fig5 <- function() {
   ordr <- hz %>% arrange(desc(layer), score) %>% pull(name)
   ge$name <- factor(ge$name, ordr); hz$name <- factor(hz$name, ordr)
   ital <- hz$name[hz$layer == "genera"]
-  bars <- call_bars(hz %>% mutate(side = layer)) %>% mutate(name = factor(name, ordr), layer = side)
+  bars <- call_bars(hz %>% mutate(side = layer, dir = direction)) %>% mutate(name = factor(name, ordr), layer = side)
   cmp <- ge %>% filter(group != "Hadza (Tanzania)") %>% mutate(x = ifelse(direction == "above", high, low + missing),
            who = factor(ifelse(group == "Other baseline studies", "other healthy adults", "US participants, same study"),
                         c("US participants, same study", "other healthy adults")))
-  ylab_it <- function(br) as.expression(lapply(br, function(n) if (n %in% ital) bquote(italic(.(n))) else bquote(.(n))))
+  # both comparators are drawn on the row itself. A row is 7.4 pt of a figure this size and a legible marker is close to
+  # 5 pt, so nudging the pair apart cost more than it bought: the two still overlapped, each hung out of its own bar, and
+  # on the four rows where both sit at the same x the four marks of two rows formed a chain whose rows could not be told
+  # apart. They are nested instead, the broad baseline an open circle and this study's own US participants a small solid
+  # diamond, which stays readable both where the two coincide and where they are a few points apart.
+  cmp_pt <- function(w, sz, fl, st) geom_point(data = filter(cmp, who == w), aes(x = 100 * x, shape = who),
+                                               size = sz, colour = INK, fill = fl, stroke = st)
   b <- ggplot(bars, aes(y = name)) +
     geom_tile(aes(x = x, width = w, fill = what), height = 0.68) +
-    geom_point(data = cmp, aes(x = 100 * x, shape = who), size = 1.5, colour = INK, fill = "white", stroke = 0.45) +
+    cmp_pt("other healthy adults", 1.5, "white", 0.45) + cmp_pt("US participants, same study", 0.85, INK, 0.3) +
     facet_grid(layer ~ ., scales = "free_y", space = "free_y") +
     scale_fill_manual(values = CALLS, name = "Hadza samples") +
-    scale_shape_manual(values = c("US participants, same study" = 23, "other healthy adults" = 21), name = NULL) +
-    scale_y_discrete(labels = ylab_it) +
-    scale_x_continuous(limits = c(0, 78), breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = c(0, 0)) +
+    # breaks fix the order of the two keys, which the override below depends on
+    scale_shape_manual(values = c("US participants, same study" = 23, "other healthy adults" = 21),
+                       breaks = c("other healthy adults", "US participants, same study"), name = NULL) +
+    scale_y_discrete(labels = ital_lab(ital)) +
+    # enough left pad for the open circle of a comparator that sits at exactly 0 %, which the border otherwise clips
+    scale_x_continuous(limits = c(0, 78), breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0.045, 0))) +
     labs(x = "samples outside the healthy range", y = NULL, title = "the genera and gene families behind the shift") +
-    guides(fill = guide_legend(order = 1, ncol = 1, keywidth = unit(6, "pt"), keyheight = unit(6, "pt")), shape = guide_legend(order = 2, ncol = 1)) +
+    guides(fill = guide_legend(order = 1, ncol = 1, keywidth = unit(6, "pt"), keyheight = unit(6, "pt")),
+           shape = guide_legend(order = 2, ncol = 1, override.aes = list(size = c(1.5, 0.85), fill = c("white", INK), stroke = c(0.45, 0.3)))) +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5), legend.position = "right",
           strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5), panel.spacing.y = unit(5, "pt"))
   p <- (a | b) + plot_layout(widths = c(1, 1.42)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))

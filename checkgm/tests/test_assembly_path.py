@@ -144,3 +144,23 @@ def test_query_below_a_floor_is_rejected_not_an_error(tmp_path):
     assert r.returncode == 0, r.stderr
     rej = pd.read_csv(tmp_path / "rep" / "rejections.tsv", sep="\t")
     assert list(rej["reason_code"]) == ["NOT_NORMALIZED"] and "BELOW_MIN_ASSEMBLY_QUALITY" in rej.loc[0, "detail"]
+
+
+def test_run_normalize_matches_normalize_then_score(tmp_path):
+    """`run-normalize` is the one-step form of `normalize` followed by `score`, so it must produce the same report
+    as the two steps it replaces; it was added without a test, and an untested shortcut is how the two paths drift."""
+    bundle = make_bundle(str(tmp_path / "b")); q = tmp_path / "q"; write_query(str(q))
+
+    two = tmp_path / "two"
+    assert run("normalize", "--bundle", bundle, "--query", str(q), "--out", str(two / "norm")).returncode == 0
+    assert run("score", "--bundle", bundle, "--normalized", str(two / "norm"), "--out", str(two / "rep")).returncode == 0
+
+    one = tmp_path / "one"
+    r = run("run-normalize", "--bundle", bundle, "--query", str(q), "--out", str(one))
+    assert r.returncode == 0, r.stderr
+    for f in ("scores.parquet", "summaries.tsv", "rejections.tsv", "report.md", "qc.tsv"):
+        assert (one / f).exists(), f
+
+    a = pd.read_parquet(two / "rep" / "scores.parquet").sort_values(["analysis_id", "layer", "feature_id"]).reset_index(drop=True)
+    b = pd.read_parquet(one / "scores.parquet").sort_values(["analysis_id", "layer", "feature_id"]).reset_index(drop=True)
+    pd.testing.assert_frame_equal(a, b)

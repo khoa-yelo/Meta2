@@ -231,5 +231,7 @@ def normalize_function(values: pd.Series, layer: str, spec: ReadsBundleSpec) -> 
     v = v.drop(labels=[c for c in special if c in v.index]); prop = v / v.sum() if v.sum() > 0 else v
     basis = spec.fbasis[layer]; b = prop.reindex(basis).fillna(0.0); qc[f"{layer}_share_in_basis"] = float(b.sum())
     z = int((b == 0).sum()); delta = spec.rules["clr_delta_fraction_of_min"] * (b[b > 0].min() if (b > 0).any() else 1.0)
-    rep = np.where(b > 0, b * (1 - z * delta), delta); clr = np.log(rep) - np.log(rep).mean()
+    with np.errstate(invalid="ignore"):   # too few detected features makes the replacement negative and the CLR undefined;
+        rep = np.where(b > 0, b * (1 - z * delta), delta)   # the caller reports that as one `checkgm: ` line, which a bare
+        clr = np.log(rep) - np.log(rep).mean()              # numpy warning on the same stream would only compete with
     return pd.DataFrame({"feature_id": basis, "proportion_mapped": b.to_numpy(), "clr": clr, "rank": layer}), qc

@@ -3,8 +3,10 @@
 the score tables named here; nothing is typed by hand. Output: figures/v2/data/*.csv."""
 import json, os, sys, gzip
 import numpy as np, pandas as pd
-P = "/home/classes/bios/270/khoa/meta2/project"; OUT = f"{P}/figures/v2/data"; os.makedirs(OUT, exist_ok=True)
-sys.path.insert(0, f"{P}/scripts/viz"); os.environ.setdefault("REFMB_PROJECT", P)
+# the project root is taken from the environment, as the README documents, and falls back to the tree this was written in
+P = (os.environ.get("CHECKGM_PROJECT") or os.environ.get("REFMB_PROJECT") or "/home/classes/bios/270/khoa/meta2/project").rstrip("/")
+OUT = f"{P}/figures/v2/data"; os.makedirs(OUT, exist_ok=True)
+sys.path.insert(0, f"{P}/scripts/viz"); os.environ["REFMB_PROJECT"] = P   # the scripts/viz helpers read this one
 import example_case as EC, fig17_range_report as F17
 tax = pd.read_parquet(f"{P}/resources/backbone/ncbi_taxonomy.parquet", columns=["taxid", "name"]); NAME = dict(zip(tax.taxid.astype(str), tax.name))
 LAYER = {"taxonomy_family": "Family", "taxonomy_genus": "Genus", "taxonomy_species": "Species", "ko_eggnog": "KO (eggNOG)", "ko_kofam": "KO (KOfam)", "pfam": "Pfam",
@@ -34,6 +36,9 @@ json.dump({k: float((ref.loc[fid, f"p{k}"] - med) / np.log(2)) for k in ["1", "2
 invr = pd.read_parquet(f"{P}/work/s0/inventory.parquet", columns=["analysis_id", "study_bioproject", "s0_status", "is_primary_analysis", "body_site_core"])
 ret = invr[invr.s0_status == "retained"]; gut = ret[ret.is_primary_analysis & (ret.body_site_core == "Gut")]
 qc = pd.read_parquet(f"{P}/work/s2/qc_per_analysis.parquet", columns=["analysis_id", "s2_status"]); qok = qc[qc.s2_status == "retained"]
+# the QC step is the only funnel row the figure could not label with a study count; it is the gut subset that passed, so
+# the studies behind it are the studies of those analyses (every retained analysis is one of the 9,195 gut analyses)
+gqc = gut[gut.analysis_id.isin(set(qok.analysis_id))]; assert len(gqc) == len(qok)
 ma = json.load(open(f"{B}/manifest.json")); mb = json.load(open(f"{P}/refs/gut-reads-adult-global-v0.2-lenient/manifest.json"))
 S = pd.read_csv(f"{P}/work/s11/pipeB/samples.tsv", sep="\t", low_memory=False)
 adult = S[S.status.isin(["included", "NOT_CONTROL"])]; ctrl = S[S.status == "included"]
@@ -41,7 +46,7 @@ f2 = pd.DataFrame([
     ("Assembly (MGnify v5)", 1, "MGnify v5 analyses", len(invr), invr.study_bioproject.nunique()),
     ("Assembly (MGnify v5)", 2, "human metagenomes", len(ret), ret.study_bioproject.nunique()),
     ("Assembly (MGnify v5)", 3, "gut, one per sample", len(gut), gut.study_bioproject.nunique()),
-    ("Assembly (MGnify v5)", 4, "pass assembly QC", len(qok), np.nan),
+    ("Assembly (MGnify v5)", 4, "pass assembly QC", len(qok), gqc.study_bioproject.nunique()),
     ("Assembly (MGnify v5)", 5, "healthy-adult baseline", ma["n_samples"], ma["n_studies"]),
     ("Read (cMD3)", 1, "cMD3 profiles", len(S), S.study.nunique()),
     ("Read (cMD3)", 2, "adults, profile resolvable", len(adult), adult.study.nunique()),
@@ -64,7 +69,11 @@ fid_.dropna().to_csv(f"{OUT}/f2_fidelity.csv", index=False)
 
 # ---- Fig 3: AUROC per study and method
 A = pd.read_csv(f"{P}/results/s8/loso_auroc.tsv", sep="\t"); A = A[A.study != "POOLED"]
-mapA = {"reference_relative": "checkGM percentiles", "raw_clr": "Raw abundances", "alpha_diversity": "Alpha diversity", "health_index": "GMHI (genus approx.)"}
+# the assembly reference_relative set spans family, genus, eggNOG KO and module layers (s8_evaluate.LAYERS_RR), so it is
+# "both"; s8 also stores the taxonomy-only and genes-only ablations, which give the same decomposition as the read pipeline
+mapA = {"reference_relative": "checkGM percentiles, taxa + genes", "reference_relative_taxonomy_only": "checkGM percentiles",
+        "reference_relative_genes_only": "checkGM percentiles, genes only", "raw_clr": "Raw abundances",
+        "alpha_diversity": "Alpha diversity", "health_index": "GMHI (genus approx.)"}
 A = A[A.feature_set.isin(mapA)]; fa = pd.DataFrame({"pipeline": "Assembly pipeline (11 studies)", "method": A.feature_set.map(mapA), "study": A.study, "auroc": A.auroc_loso, "unseen": True})
 H = pd.read_csv(f"{P}/results/s15/health_indices_B.tsv", sep="\t"); base = H.drop_duplicates("study").set_index("study")
 rows = [("checkGM percentiles", base.percentiles), ("Raw abundances", base.raw_abundances)]

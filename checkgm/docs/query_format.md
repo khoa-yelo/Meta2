@@ -21,7 +21,7 @@ The rules come from the bundle (`normalization/rules.json`), so a query is norma
 1. **Taxonomy.** Each CDS taxid is placed on the NCBI taxonomy shipped in the bundle. Per contig and rank, a majority vote
    (at least 50 % of the resolvable CDS calls) assigns the contig; contig weight is length x coverage. Contigs with no
    majority go to an `unmapped` bucket. Proportions are taken among mapped weight and transformed to centred log-ratios
-   (CLR) over the bundle's feature basis (`clr_basis_family.txt`, 584 families; genus 1,690) with multiplicative replacement
+   (CLR) over the bundle's feature basis (`clr_basis_family.txt`, 584 families; genus 1,687) with multiplicative replacement
    of zeros.
 2. **Gene layers.** Per KO and Pfam family: CDS count and coverage sum. Genome equivalents = median coverage sum over the
    52 single-copy marker KOs in `marker_panel.tsv`. The value scored is copies per genome; at scoring, values under 0.05
@@ -38,8 +38,8 @@ The rules come from the bundle (`normalization/rules.json`), so a query is norma
   carry `calibration_applied = none`.
 - If the tables come from another assembly pipeline, its measurement space may differ (different gene caller, annotation
   database or assembler). The `checkgm.calibrate` module (library only, there is no command for it) can fit a calibration
-  from a set of samples measured both by the user's pipeline and by the reference pipeline, and decides layer by layer
-  what is scorable; `checkgm score --calibration DIR` then applies it and records its id in every score. No calibration is
+  from a set of samples measured both by the user's pipeline and by the reference pipeline, deciding layer by layer what
+  is scorable. `checkgm score --calibration DIR` then applies it and records its id in every score. No calibration is
   shipped in this release. Without one, scores from a different pipeline are not comparable with the reference and should
   not be reported as such.
 

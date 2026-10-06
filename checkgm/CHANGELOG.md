@@ -2,6 +2,69 @@
 
 ## Unreleased
 
+- 2026-10-06, documentation review round 6. Four claims that round 5 either introduced or strengthened past what the
+  repository's own files support have been withdrawn. The README no longer asserts that `scripts/viz2/` matches the
+  project workspace exactly, an equality that could not hold of a tree still being edited and did not hold when
+  checked: both scripts differ, the repository's copies dating from 00:15 and the workspace's from 01:02 and 01:09 of
+  the same day. Both snapshots are therefore described by their date alone. The `sample_meta.json` row no longer
+  promises a sample id, a body site and a pipeline version, since only `checkgm normalize` copies a query's
+  `sample.json` wholesale, while the import and `run-*` commands write the pipeline name by itself; the row now says
+  which is which. "The function layers add no predictive advantage at all" is replaced by the narrower claim the
+  manuscript defends, that nothing is added on top of the taxa, because on the assembly-based pipeline the gene layers
+  alone are in fact the stronger ones at 0.631 against 0.585 (`docs/reports/assembly_case_control_evaluation.md`).
+  `scripts/viz2/README.md` gains the two R dependencies that no `library()` call names, `ragg` and a cairo-enabled R,
+  both reached through `pkg::fn` inside the `save_fig` helper and both required for a fresh install to get through the
+  first figure.
+- Corrected with them, the README having been less careful about a competitor than the paper is:
+  - GMHI now carries the caveat the manuscript gives it, that only 33 of its 50 species are matched by name in
+    MetaPhlAn 3, so its 0.62 is a lower bound on what the index achieves on its native input;
+  - the 0.75 beside it is marked as a manuscript analysis rather than a shipped feature, nothing in the package
+    fitting or applying a health score;
+  - the superseded figure set is sixteen figures numbered up to 18, not eighteen figures, in both places that counted
+    it;
+  - the unfinished rename of `REFMB_PROJECT` to `CHECKGM_PROJECT` is documented as unfinished, the shipped
+    `tokens.py` reading the new name while `prep.py` exports the old one, and both are now set in the figure command;
+  - the scoring image's leftover `REFMB_BUNDLES` default is noted beside the entrypoint caveat it belongs with.
+- **Open item.** `docs/reports/reads_calibration_and_evaluation.md` is still the run of 2026-09-30, and section 4 of
+  `docs/validation.md` still quotes it, so the repository carries the superseded 0.690 at p = 0.052 beside the
+  README's 0.693 at p = 0.039. The README says so explicitly rather than pointing a reviewer at a stale verdict, but
+  the repair is to re-copy `results/s11/pipelineB_report.md` of 2026-10-06 02:48 UTC over that report and bring
+  section 4 to 0.693, p = 0.039 and 0.771.
+- 2026-10-06, documentation review round 5. The read-based case/control figures in the README now follow the project
+  workspace's `results/s11/pipelineB_report.md` as regenerated on 2026-10-06, which gives taxonomy 0.693 against 0.664
+  over 14 studies (10 wins, p = 0.039) and 0.771 against 0.715 in colorectal cancer alone (p = 0.004). The earlier
+  run's 0.690 at p = 0.052 is superseded, and because 0.052 and 0.039 fall on opposite sides of 0.05 the repository
+  and the manuscript had been giving a reader two different verdicts on one comparison. Stated beside them is the
+  caveat the paper makes, that a matched L1-penalised model does not reproduce the margin (0.719 against 0.705,
+  p = 0.33), so the random-forest result is not read as a general one. GMHI and GMWI2 are now named in the README with
+  the training-overlap caveat that makes the GMWI2 comparison an indirect one.
+- Corrected with them, each against the file it has to agree with:
+  - the test count (31, about 50 s, where 0.8.2 recorded 30 and 40 s);
+  - `pip install -e ".[test]"`, quoted as the CI workflow quotes it, because zsh reads the bare form as a glob;
+  - the genus CLR basis in `docs/query_format.md` (1,687 ids, as a bundle's `normalization/clr_basis_genus.txt` and
+    its manifest both have it, not 1,690);
+  - the version banner's capitalisation, with one sentence settling the convention that checkGM names the project and
+    `checkgm` the package, the command and the image tag;
+  - the scoring image's build command, whose `checkGM` tag podman and docker both reject;
+  - the strict tier's description, which omitted the health-label requirement that distinguishes it;
+  - a `sample_meta.json` row in the output table;
+  - the module layer's far lower fraction outside the band;
+  - a citation for the 19.8 % of families outside in the African cohorts, which sits in
+    `assembly_healthy_strata.md` rather than in either report the text had pointed at.
+- `docs/rebuild.md` no longer implies that `checkgm.build_reference.build` produced the released assembly baseline. It
+  did not: those manifests record `refmb 0.1.0 (project/scripts/s5_build_reference.py)`, a standalone script that
+  never imports the package, while the packaged builder wrote the read-based bundles only. Whether the two agree value
+  for value is untested, and the page now says so.
+- The documentation map gains `paper/` with its build line, and names `scripts/viz2/` as the set that draws the
+  manuscript's five figures, `scripts/viz/` being the superseded set that no current `\includegraphics` reaches. The
+  claim that `scripts/viz/` holds byte-identical copies of the workspace scripts is withdrawn, here and for 0.8.2,
+  having held at neither release: 14 of its 21 scripts now differ, and both directories are described as dated
+  snapshots instead. `scripts/viz2/README.md` also drops the suggestion that `CHECKGM_PROJECT` alone makes the scripts
+  portable, since the project root is hard-coded in both of them.
+- The *Get a reference bundle* section says plainly that no public download exists yet and that the tarballs have to
+  be requested from the authors, and the shell block carries that missing step as its first line. Verifying and
+  unpacking a file nothing had fetched was the largest usability gap in the page, because every command after it
+  depends on the bundle being there.
 - 2026-10-02: the repository owner decided to leave the early example profile `checkgm/examples/CosteaPI_2017_alien2-11-0-0.txt`
   (a public curatedMetagenomicData 3 MetaPhlAn 3 profile, commits `97cba6b` and `92c85ce`) in the pushed history of branch
   `checkgm` rather than rewrite it; the example profile shipped since 0.8.0, `examples/synthetic_healthy_adult.txt`, is synthetic.
@@ -33,6 +96,7 @@ columns are unchanged (`scores.parquet` and `summaries.tsv` are identical to 0.8
   configuration files carry (S6, S7, S8, S11, S12/S14, anchors, tier A/B).
 - The default branch's README (`main`) now points to `checkgm/` on branch `checkgm`. `scripts/viz/` re-copied byte-identical
   from the project workspace after the fourth figure revision (10 of 17 scripts changed; see the project's figure notes).
+  The byte-identical half of that claim is withdrawn under *Unreleased*, not having held at this release either.
 
 ## 0.8.1 — 2026-10-02, packaging round 3
 
@@ -80,7 +144,8 @@ identical to 0.8.0 on the packaged test inputs); the healthy-map columns change 
 - **Open item for the repository owner.** The public cMD3 per-sample profile `checkgm/examples/CosteaPI_2017_alien2-11-0-0.txt`
   that 0.8.0 removed from the tree is still in the pushed history of branch `checkgm` (commits `97cba6b` and `92c85ce`,
   before `7ceaba7`). Removing it requires rewriting and force-pushing the branch, which needs the owner's decision; the
-  exact command is prepared in the project workspace (`distribution/HISTORY_CLEANUP.md`). Until then the history holds one
+  exact command is prepared in the project workspace (`distribution/HISTORY_CLEANUP.md`, a workspace file that is not
+  shipped in this repository). Until then the history holds one
   public individual's MetaPhlAn profile.
 
 ## 0.8.0 — 2026-10-02, packaging round 2 (version number unchanged)
