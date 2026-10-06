@@ -69,6 +69,9 @@ def make(out_dir):
     ax = fig.add_subplot(gs[1, 1])
     rows = [("percentiles", base["percentiles"], COL["reference_relative"], "o"), ("raw abundances", base["raw_abundances"], COL["raw_clr"], "o"),
             ("Shannon diversity", Hs["Shannon"], T.CAT[2], "o"), ("GMHI (50 species)", Hs["GMHI"], T.CAT[3], "o"), ("GMWI2", Hs["GMWI2"], T.INK["primary"], "D")]
+    # supervised health score on refmb output (pre-specified primary model; results/s16/health_score_B.tsv), every study scored by a model trained without it
+    HS = pd.read_csv(f"{P}/results/s16/health_score_B.tsv", sep="\t"); HS = HS[HS.feature_set == "pct+summary+presence"].set_index("study")["auroc"]
+    rows.insert(1, ("refmb health score", HS, COL["reference_relative"], "s"))
     yl = []; y = 0
     for gi, (glab, m) in enumerate([(f"all {len(base)} studies", pd.Series(True, index=base.index)), (f"{int(unseen.sum())} studies not used to train GMWI2", unseen)]):
         ax.text(0.405, y - 0.75, glab, fontsize=T.PT_MIN, color=T.INK["primary"], weight="bold", va="center")
@@ -78,7 +81,7 @@ def make(out_dir):
             ax.text(v + 0.012, y, f"{v:.2f}", ha="left", va="center", fontsize=T.PT_MIN, color=T.INK["primary"]); yl.append((y, lab)); y += 1
         y += 1.2
     ax.axvline(0.5, color=T.INK["axis"], lw=0.6, zorder=1); ax.set_yticks([a for a, _ in yl]); ax.set_yticklabels([b for _, b in yl]); ax.tick_params(axis="y", length=0)
-    ax.set_xlim(0.4, 0.9); ax.set_xticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9]); ax.set_ylim(y - 1.5, -1.4); ax.set_xlabel("mean AUROC over studies"); ax.set_title("d  read pipeline: published\nhealth indices, scores as is", loc="left")
+    ax.set_xlim(0.4, 0.9); ax.set_xticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9]); ax.set_ylim(y - 1.5, -1.4); ax.set_xlabel("mean AUROC over studies"); ax.set_title("d  read pipeline: health\nindices vs percentiles", loc="left")
     T.save(fig, "fig8_performance", out_dir); plt.close(fig)
 
 
