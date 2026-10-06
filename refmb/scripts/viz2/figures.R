@@ -149,7 +149,7 @@ fig1 <- function() {
           plot.margin = margin(2, 122, 2, 2))
   p <- wrap_elements(full = a) / ((b | c_) + plot_layout(widths = c(1, 1.32))) + plot_layout(heights = c(1.02, 1.62)) + plot_annotation(tag_levels = "a") &
     theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig1", DOUBLE, 2.58)
+  save_fig(p, "fig1", DOUBLE, 2.62)
 }
 
 # ======================================================================================== Figure 2: pipelines, curation, checks
@@ -253,8 +253,8 @@ fig3 <- function() {
           axis.text.y = element_text(size = 6.5, colour = INK), panel.spacing.y = unit(4, "pt"))
   gt <- ggplot_gtable(ggplot_build(g))                                     # facet heights proportional to the number of bars
   rows <- gt$layout$t[grepl("panel", gt$layout$name)]; gt$heights[rows] <- unit(as.numeric(table(s$pipeline)), "null")
-  ggsave(file.path(OUT, "fig3.pdf"), gt, width = SINGLE, height = 2.85, units = "in", device = cairo_pdf)
-  ggsave(file.path(OUT, "fig3.png"), gt, width = SINGLE, height = 2.85, units = "in", dpi = 300, device = ragg::agg_png, bg = "white"); message("wrote fig3")
+  ggsave(file.path(OUT, "fig3.pdf"), gt, width = SINGLE, height = 2.62, units = "in", device = cairo_pdf)
+  ggsave(file.path(OUT, "fig3.png"), gt, width = SINGLE, height = 2.62, units = "in", dpi = 300, device = ragg::agg_png, bg = "white"); message("wrote fig3")
 }
 
 # ---- "share outside the range" bars shared by Figs 4a and 5b: every bar grows rightward from zero and the panel is split by
