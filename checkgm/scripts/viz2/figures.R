@@ -2,7 +2,7 @@
 # Figures 1-5 of the two-column paper, drawn with ggplot2 + patchwork from the tidy tables that scripts/viz2/prep.py writes to
 # figures/v2/data. One theme and one palette throughout:
 #   blue = below the healthy range (light blue = expected but missing), orange = above it, grey = within;
-#   violet = checkgm, greys = comparators; teal / ochre = assembly / read pipeline (schematics and curation only).
+#   violet = checkGM, greys = comparators; teal / ochre = assembly / read pipeline (schematics and curation only).
 # Usage: Rscript scripts/viz2/figures.R [fig1 fig2 ...]   (default: all). Output: figures/v2/figN.pdf (+ .png preview, 300 dpi).
 suppressPackageStartupMessages({library(ggplot2); library(patchwork); library(dplyr); library(tidyr); library(readr); library(scales)})
 options(readr.show_col_types = FALSE, dplyr.summarise.inform = FALSE)
@@ -155,7 +155,7 @@ fig1 <- function() {
           plot.margin = margin(2, 122, 2, 2))
   p <- wrap_elements(full = a) / ((b | c_) + plot_layout(widths = c(1, 1.32))) + plot_layout(heights = c(1.02, 1.50)) + plot_annotation(tag_levels = "a") &
     theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig1", DOUBLE, 2.50)
+  save_fig(p, "fig1", DOUBLE, 2.62)
 }
 
 # ======================================================================================== Figure 2: pipelines, curation, checks
@@ -233,37 +233,41 @@ fig2 <- function() {
     labs(x = "Spearman ρ with source percentiles", y = NULL, title = "reproduced from raw reads") +
     theme(panel.grid.major.y = element_blank(), strip.text = element_text(size = 6.5, face = "plain", colour = INK2))
   p <- wrap_elements(full = a) / (b | c_ | d) + plot_layout(heights = c(1.06, 2.45)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig2", DOUBLE, 2.9)
+  save_fig(p, "fig2", DOUBLE, 3.05)
 }
 
 # ======================================================================================== Figure 3: disease benchmark
 fig3 <- function() {
   au <- read_csv(file.path(D, "f3_auroc.csv"))
+  # row labels drop the tool name: the violet bars are checkGM output, the greys are the comparators
   au$method <- recode(au$method, "GMHI (genus approx.)" = "GMHI, genus approx.", "GMHI (published)" = "GMHI", "GMWI2 (published)" = "GMWI2",
                       "Alpha diversity" = "alpha diversity", "Raw abundances" = "raw abundances",
-                      "checkgm percentiles" = "checkgm percentiles, taxa", "checkgm percentiles, genes only" = "checkgm percentiles, genes",
-                      "checkgm percentiles, taxa + genes" = "checkgm percentiles, taxa + genes")
-  lv <- c("assembly pipeline, 11 studies", "read pipeline, 14 studies", "read pipeline, the 4 GMWI2 never saw")
-  au$pipeline <- factor(recode(au$pipeline, "Assembly pipeline (11 studies)" = lv[1], "Read pipeline (14 studies)" = lv[2], "Read pipeline, 4 studies GMWI2 never saw" = lv[3]), lv)
+                      "checkGM health score" = "health score", "checkGM percentiles" = "percentiles, taxa",
+                      "checkGM percentiles, genes only" = "percentiles, genes", "checkGM percentiles, taxa + genes" = "percentiles, both")
+  lv <- c("assembly pipeline\n11 studies", "read pipeline\n14 studies", "read pipeline\n4 studies GMWI2 never saw")
+  au$pipeline <- factor(recode(au$pipeline, "Assembly pipeline (11 studies)" = lv[1], "Read pipeline (14 studies)" = lv[2],
+                               "Read pipeline, 4 studies GMWI2 never saw" = lv[3]), lv)
+  OURS <- c("health score", "percentiles, taxa", "percentiles, genes", "percentiles, both")
   s <- au %>% group_by(pipeline, method) %>% summarise(m = mean(auroc), n = n()) %>% ungroup() %>%
-    mutate(lab = ifelse(method == "GMWI2" & pipeline == lv[2], "GMWI2†", method), key = paste(pipeline, method),
-           grp = ifelse(grepl("^checkgm", method), "checkgm", ifelse(method == "GMWI2", "GMWI2", "other")))
+    mutate(lab = ifelse(method == "GMWI2" & pipeline == lv[2], "GMWI2\u2020", method), key = paste(pipeline, method),
+           grp = ifelse(method %in% OURS, "checkGM", ifelse(method == "GMWI2", "GMWI2", "other")))
   s <- s %>% arrange(pipeline, m) %>% mutate(key = factor(key, key))
   au <- au %>% mutate(key = factor(paste(pipeline, method), levels(s$key)))
   g <- ggplot(s, aes(y = key)) + geom_vline(xintercept = 0.5, colour = MUTED, linewidth = 0.35) +
-    geom_tile(aes(x = (0.5 + m) / 2, width = abs(m - 0.5), fill = grp), height = 0.7) +
+    geom_tile(aes(x = (0.5 + m) / 2, width = abs(m - 0.5), fill = grp), height = 0.72) +
     geom_point(data = au, aes(x = auroc), position = position_jitter(height = 0.17, width = 0, seed = 2), size = 0.6, colour = INK, alpha = 0.5, stroke = 0) +
-    geom_text(aes(x = 1.075, label = sprintf("%.2f", m), fontface = ifelse(grp == "checkgm", "bold", "plain")), hjust = 1, size = pt(6.2), family = FONT, colour = INK) +
-    facet_wrap(~pipeline, ncol = 1, scales = "free_y") + scale_fill_manual(values = c(checkgm = ACC, GMWI2 = GREY_D, other = GREY_L), guide = "none") +
+    geom_text(aes(x = 1.045, label = sprintf("%.2f", m), fontface = ifelse(grp == "checkGM", "bold", "plain")), hjust = 1, size = pt(6.4), family = FONT, colour = INK) +
+    facet_wrap(~pipeline, nrow = 1, scales = "free_y") +
+    scale_fill_manual(values = c(checkGM = ACC, GMWI2 = GREY_D, other = GREY_L), name = NULL,
+                      labels = c(checkGM = "checkGM output", GMWI2 = "GMWI2", other = "other comparators"), breaks = c("checkGM", "GMWI2", "other")) +
     scale_y_discrete(labels = setNames(s$lab, s$key)) +
-    scale_x_continuous(limits = c(0.25, 1.08), breaks = seq(0.3, 1.0, 0.1), labels = c("0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0"), expand = c(0, 0)) +
-    labs(x = "AUROC in studies left out of training", y = NULL) +
-    theme(panel.grid.major.y = element_blank(), strip.text = element_text(size = 6.5, face = "bold", colour = INK, margin = margin(3, 0, 2, 0)),
-          axis.text.y = element_text(size = 6.5, colour = INK), panel.spacing.y = unit(4, "pt"))
-  gt <- ggplot_gtable(ggplot_build(g))                                     # facet heights proportional to the number of bars
-  rows <- gt$layout$t[grepl("panel", gt$layout$name)]; gt$heights[rows] <- unit(as.numeric(table(s$pipeline)), "null")
-  ggsave(file.path(OUT, "fig3.pdf"), gt, width = SINGLE, height = 3.1, units = "in", device = cairo_pdf)
-  ggsave(file.path(OUT, "fig3.png"), gt, width = SINGLE, height = 3.1, units = "in", dpi = 300, device = ragg::agg_png, bg = "white"); message("wrote fig3")
+    scale_x_continuous(limits = c(0.28, 1.05), breaks = c(0.4, 0.6, 0.8, 1.0), expand = c(0, 0)) +
+    labs(x = "AUROC in studies left out of training (bar = mean, dots = studies)", y = NULL) +
+    guides(fill = guide_legend(keywidth = unit(6, "pt"), keyheight = unit(6, "pt"))) +
+    theme(panel.grid.major.y = element_blank(), strip.text = element_text(size = 6.5, face = "bold", colour = INK, hjust = 0.5, margin = margin(1, 0, 3, 0)),
+          axis.text.y = element_text(size = 6.5, colour = INK), panel.spacing.x = unit(9, "pt"), legend.position = "bottom",
+          legend.margin = margin(-2, 0, 0, 0))
+  save_fig(g, "fig3", DOUBLE, 1.95)
 }
 
 # ---- "share outside the range" bars shared by Figs 4a and 5b: every bar grows rightward from zero and the panel is split by
@@ -309,13 +313,13 @@ fig4 <- function() {
     x <- sub("^methylerythritol phosphate pathway II$", "methylerythritol phosphate pathway", x)
     x
   }
-  keep_n <- c(Family = 4, Genus = 5)                        # room for the function rows; the full lists are in the atlas tables
+  keep_n <- c(Family = 5, Genus = 6)                        # room for the function rows; the full lists are in the atlas tables
   cr <- read_csv(file.path(D, "f4_crc.csv")) %>% filter(rank != "Species")
-  topt <- cr %>% distinct(rank, name, median_shift) %>% group_by(rank) %>% slice_min(median_shift, n = 5) %>% ungroup() %>%
-    filter(rank != "Family" | name %in% (cr %>% distinct(rank, name, median_shift) %>% filter(rank == "Family") %>% slice_min(median_shift, n = 4) %>% pull(name)))
+  topt <- cr %>% distinct(rank, name, median_shift) %>% group_by(rank) %>% slice_min(median_shift, n = 6) %>% ungroup() %>%
+    filter(rank != "Family" | name %in% (cr %>% distinct(rank, name, median_shift) %>% filter(rank == "Family") %>% slice_min(median_shift, n = 5) %>% pull(name)))
   cr <- filter(cr, name %in% topt$name)
   fn <- read_csv(file.path(D, "f4_crc_function.csv")) %>% mutate(name = short(name)) %>%
-    group_by(rank) %>% filter(name %in% (distinct(., name, median_shift) %>% slice_min(median_shift, n = 4) %>% pull(name))) %>% ungroup()
+    group_by(rank) %>% filter(name %in% (distinct(., name, median_shift) %>% slice_min(median_shift, n = 5) %>% pull(name))) %>% ungroup()
   cr <- bind_rows(cr %>% mutate(rank = ifelse(rank == "Family", "families", "genera")),
                   fn %>% mutate(rank = ifelse(rank == "gene families", "genes", rank))) %>% mutate(cohort = cohort_lab(study))
   ital <- cr$name[cr$rank == "genera"]
@@ -337,7 +341,7 @@ fig4 <- function() {
           axis.text.y = element_text(colour = INK, size = 6.2), legend.title = element_text(size = 6, colour = INK2), legend.position = "right",
           panel.spacing.y = unit(2.5, "pt"))
   p <- (a | b) + plot_layout(widths = c(0.86, 1.0)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig4", DOUBLE, 2.76)
+  save_fig(p, "fig4", DOUBLE, 2.95)
 }
 
 # ======================================================================================== Figure 5: a population outside the range
@@ -394,7 +398,7 @@ fig5 <- function() {
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5), legend.position = "right",
           strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5), panel.spacing.y = unit(5, "pt"))
   p <- (a | b) + plot_layout(widths = c(1, 1.42)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig5", DOUBLE, 2.30)
+  save_fig(p, "fig5", DOUBLE, 2.50)
 }
 
 args <- commandArgs(trailingOnly = TRUE); if (length(args) == 0) args <- paste0("fig", 1:5)

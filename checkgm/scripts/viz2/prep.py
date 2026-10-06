@@ -4,7 +4,7 @@ the score tables named here; nothing is typed by hand. Output: figures/v2/data/*
 import json, os, sys, gzip
 import numpy as np, pandas as pd
 P = "/home/classes/bios/270/khoa/meta2/project"; OUT = f"{P}/figures/v2/data"; os.makedirs(OUT, exist_ok=True)
-sys.path.insert(0, f"{P}/scripts/viz"); os.environ.setdefault("CHECKGM_PROJECT", P)
+sys.path.insert(0, f"{P}/scripts/viz"); os.environ.setdefault("REFMB_PROJECT", P)
 import example_case as EC, fig17_range_report as F17
 tax = pd.read_parquet(f"{P}/resources/backbone/ncbi_taxonomy.parquet", columns=["taxid", "name"]); NAME = dict(zip(tax.taxid.astype(str), tax.name))
 LAYER = {"taxonomy_family": "Family", "taxonomy_genus": "Genus", "taxonomy_species": "Species", "ko_eggnog": "KO (eggNOG)", "ko_kofam": "KO (KOfam)", "pfam": "Pfam",
@@ -64,19 +64,21 @@ fid_.dropna().to_csv(f"{OUT}/f2_fidelity.csv", index=False)
 
 # ---- Fig 3: AUROC per study and method
 A = pd.read_csv(f"{P}/results/s8/loso_auroc.tsv", sep="\t"); A = A[A.study != "POOLED"]
-mapA = {"reference_relative": "checkgm percentiles", "raw_clr": "Raw abundances", "alpha_diversity": "Alpha diversity", "health_index": "GMHI (genus approx.)"}
+mapA = {"reference_relative": "checkGM percentiles", "raw_clr": "Raw abundances", "alpha_diversity": "Alpha diversity", "health_index": "GMHI (genus approx.)"}
 A = A[A.feature_set.isin(mapA)]; fa = pd.DataFrame({"pipeline": "Assembly pipeline (11 studies)", "method": A.feature_set.map(mapA), "study": A.study, "auroc": A.auroc_loso, "unseen": True})
 H = pd.read_csv(f"{P}/results/s15/health_indices_B.tsv", sep="\t"); base = H.drop_duplicates("study").set_index("study")
-rows = [("checkgm percentiles", base.percentiles), ("Raw abundances", base.raw_abundances)]
+rows = [("checkGM percentiles", base.percentiles), ("Raw abundances", base.raw_abundances)]
 for n, lab in [("GMHI", "GMHI (published)"), ("Shannon", "Alpha diversity"), ("GMWI2", "GMWI2 (published)")]:
     rows.append((lab, H[H["index"] == n].set_index("study").auroc_direct))
-HS = pd.read_csv(f"{P}/results/s16/health_score_B.tsv", sep="\t"); rows.append(("checkgm health score", HS[HS.feature_set == "pct+summary+presence"].set_index("study").auroc))
+HS = pd.read_csv(f"{P}/results/s16/health_score_B.tsv", sep="\t"); rows.append(("checkGM health score", HS[HS.feature_set == "pct+summary+presence"].set_index("study").auroc))
 # do gene families and pathways add anything? the same leave-one-study-out random forest on the function percentiles, and on
 # taxa + function together (results/s11/pipelineB_loso_auroc.tsv, written by s13)
 LF = pd.read_csv(f"{P}/results/s11/pipelineB_loso_auroc.tsv", sep="\t")
 LF = LF[(LF.training == "all_studies") & (LF.features == "reference_relative")]
-for fs, lab in [("function", "checkgm percentiles, genes only"), ("all", "checkgm percentiles, taxa + genes")]:
+for fs, lab in [("function", "checkGM percentiles, genes only"), ("all", "checkGM percentiles, taxa + genes")]:
     rows.append((lab, LF[LF.feature_set == fs].set_index("study").auroc))
+fb = pd.concat([pd.DataFrame({"method": lab, "study": s_.index, "auroc": s_.values}) for lab, s_ in rows])
+fb["unseen"] = ~fb.study.map(base.in_gmwi2_training).astype(bool)
 f3 = pd.concat([fa, fb.assign(pipeline="Read pipeline (14 studies)"), fb[fb.unseen].assign(pipeline="Read pipeline, 4 studies GMWI2 never saw")])
 f3.to_csv(f"{OUT}/f3_auroc.csv", index=False)
 
