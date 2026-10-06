@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+- 2026-10-06, **the read-based out-of-sample scoring was wrong in two ways and has been corrected; every read-based
+  number in this repository and in `paper/` comes from the re-run.** Both defects were in how the project decides which
+  baseline scores a sample (`project/scripts/s12_oos_scores.py`), and both were found by auditing the one condition the
+  manuscript rests on: that no sample was ever compared with a baseline that contained it.
+  - **A study was split across two baselines.** The exclusion of a sample that also sits in the pool under another
+    study's name was applied sample by sample. In GuptaA_2019 all 30 controls are DhakanDB_2019 duplicates and none of
+    the 30 colorectal cancer cases is, so the controls were scored against the baseline rebuilt without DhakanDB_2019
+    and the cases against the full baseline. The one baseline difference inside that study was therefore perfectly
+    confounded with the case/control label — the exact artifact the manuscript's leakage paragraph rules out — and the
+    study's reported shifts were differences between two baselines rather than percentiles of one. The exclusion is now
+    a property of the study: if any sample of a study duplicates a pool study, the whole study is scored against the
+    baseline rebuilt without it. Checked sample by sample, no study is now split (one was).
+  - **A donor cohort deposited twice was only half held out.** The duplicate audit matched ENA run-accession strings,
+    and LeChatelierE_2013 and NielsenHB_2014 are two curatedMetagenomicData 3 deposits of one MetaHIT Danish cohort
+    under largely disjoint accession sets: 177 specimens appear in both, of which only MH0001–MH0005 share any
+    accession. The audit recorded 5 of 171 pool-internal pairs, so when one deposit was left out for the
+    leave-one-study-out calibration the other deposit's profile of the same specimen stayed in the baseline that scored
+    it — for 342 of the 6,494 pool samples. The audit is now a committed script,
+    `project/scripts/s11_cross_study_duplicates.py`, which runs an accession test and a sequencing-fingerprint test
+    (identical `number_reads` and `number_bases`) and unions them, because neither is a superset of the other; it finds
+    201 pairs where the old table held 35. A leave-one-study-out baseline now holds out every study sharing a specimen
+    with the one being scored, so the two deposits are held out together. Checked sample by sample, 0 of the 9,123
+    scored samples now sees itself or another deposit of itself in its baseline (342 did).
+  - **What moved.** The held-out-cohort calibration is unchanged to the last digit, no sample of those cohorts being
+    duplicated anywhere. In-pool leave-one-study-out figures moved for the two MetaHIT deposits and for no other study;
+    of the per-layer summaries in `reads_calibration_and_evaluation.md` (median over studies of the study median) only
+    genus changed, 4.7 % to 4.8 %, and of the median-over-studies of the study *mean* that the manuscript's calibration
+    panel plots, likewise only genus, 5.53 % to 5.63 %. The read-based taxonomy case/control comparison is now
+    0.688 against 0.664 over 14 studies (10 of them, one-sided p = 0.034, from 0.693 and p = 0.039), and 0.770 against
+    0.715 in colorectal cancer alone (8 of 9, p = 0.004). GMHI (0.615), GMWI2 (0.725) and Shannon (0.476) are
+    unchanged, being computed from raw abundances. The pre-specified health score is 0.747 as before. The matched
+    sparse-model control moved most: percentiles against raw abundances with summaries and presence added is now higher
+    in 7 of 14 studies at two-sided p = 0.81, where it was 10 of 14 at p = 0.30, which strengthens rather than weakens
+    the manuscript's claim that the random forest's advantage is classifier-specific. In the colorectal cancer atlas
+    the consistent-feature count went from 198 to 199. The six families and ten genera the manuscript names are
+    unchanged in membership and direction, and in median shift but for one two-cohort genus that moved 0.2 points; the
+    function layers moved, to 99 MetaCyc pathways (86 down) and 82 KEGG orthologs (72 down) from 100 (85 down) and 80
+    (70 down). Only GuptaA_2019's own feature rows changed at all, by a mean 1.1 and at most 7.3 points of shift.
+  - The four read-based validation reports in `docs/reports/` were re-copied from the new run, which also closes the
+    open item recorded below: the repository no longer carries two different verdicts on the taxonomy comparison.
+  - Not fixed, because it is a composition fact rather than a leakage one and correcting it would mean rebuilding the
+    released bundle: the read-based pool's 6,494 samples are 6,323 distinct specimens, so 171 donors carry twice the
+    weight of the rest. This is now stated in the README and in `docs/validation.md` section 2.
+
 - 2026-10-06, `checkgm run-normalize` added: the one-step form of `normalize` followed by `score`, which the
   `run-mgnify` and `run-metaphlan` pairs already had and the generic assembly path did not. A test asserts that
   its `scores.parquet` is identical to the two-step result, so the shortcut cannot drift from the path it
@@ -30,11 +74,10 @@
   - the unfinished rename of `REFMB_PROJECT` to `CHECKGM_PROJECT` is documented as unfinished, the shipped
     `tokens.py` reading the new name while `prep.py` exports the old one, and both are now set in the figure command;
   - the scoring image's leftover `REFMB_BUNDLES` default is noted beside the entrypoint caveat it belongs with.
-- **Open item.** `docs/reports/reads_calibration_and_evaluation.md` is still the run of 2026-09-30, and section 4 of
-  `docs/validation.md` still quotes it, so the repository carries the superseded 0.690 at p = 0.052 beside the
-  README's 0.693 at p = 0.039. The README says so explicitly rather than pointing a reviewer at a stale verdict, but
-  the repair is to re-copy `results/s11/pipelineB_report.md` of 2026-10-06 02:48 UTC over that report and bring
-  section 4 to 0.693, p = 0.039 and 0.771.
+- ~~**Open item.**~~ *Resolved by the entry at the top of this file on 2026-10-06.* `docs/reports/reads_calibration_and_evaluation.md`
+  was still the run of 2026-09-30, and section 4 of `docs/validation.md` still quoted it, so the repository carried the
+  superseded 0.690 at p = 0.052 beside the README's 0.693 at p = 0.039. Both now carry the run of 2026-10-06 16:12 UTC,
+  0.688 at p = 0.034 and 0.770, and that run supersedes the 0.693 as well.
 - 2026-10-06, documentation review round 5. The read-based case/control figures in the README now follow the project
   workspace's `results/s11/pipelineB_report.md` as regenerated on 2026-10-06, which gives taxonomy 0.693 against 0.664
   over 14 studies (10 wins, p = 0.039) and 0.771 against 0.715 in colorectal cancer alone (p = 0.004). The earlier

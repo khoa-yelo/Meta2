@@ -9,7 +9,7 @@ pipeline together with its own baseline.
 | pipeline | measurement | reference baseline (bundle) | reference pool | layers scored |
 |---|---|---|---|---|
 | **assembly-based** | reproduces MGnify pipeline v5.0 (metaSPAdes/MEGAHIT, Prodigal + FragGeneScan, DIAMOND vs UniRef90, eggNOG-mapper KO, Pfam, KOfam, KEGG module completeness) | `gut-assembly-adult-global-v0.8-{lenient,strict}` | 1,941 healthy adults, 26 studies | family, genus, KO (eggNOG), KO (KOfam), Pfam, KEGG module |
-| **read-based** | reproduces curatedMetagenomicData 3 (MetaPhlAn 3.0.14, marker database mpa_v30_CHOCOPhlAn_201901; optional HUMAnN 3) | `gut-reads-adult-global-v0.2-{lenient,strict}` | 6,494 healthy adults, 19 studies | family, genus, species; KO and pathway when HUMAnN 3 tables are given |
+| **read-based** | reproduces curatedMetagenomicData 3 (MetaPhlAn 3.0.14, marker database mpa_v30_CHOCOPhlAn_201901; optional HUMAnN 3) | `gut-reads-adult-global-v0.2-{lenient,strict}` | 6,494 healthy adults, 19 studies (6,323 distinct specimens: see below) | family, genus, species; KO and pathway when HUMAnN 3 tables are given |
 
 A *bundle* is a directory of summary statistics (per-feature prevalence and percentile grids, a PCA landscape of the
 reference) with the normalization rules the reference was built with. It contains no sample-level data. Each baseline
@@ -18,6 +18,14 @@ start with. The **strict baseline** serves as a sensitivity analysis. Where the 
 health status was never recorded, the strict tier requires the health label itself, and that requirement bites, health
 status being stated for only 64 % of gut samples. Reported antibiotic use, age above 65, BMI outside 18.5-30 and
 pregnancy are excluded on top of it (`docs/configs/inclusion.yaml`).
+
+One fact about the read-based pool is worth stating next to its size. 342 of its 6,494 samples are 171 pairs in which
+the same specimen was deposited twice in curatedMetagenomicData 3, as LeChatelierE_2013 and as NielsenHB_2014, two
+deposits of one MetaHIT Danish cohort. The pool therefore describes **6,323 distinct specimens**, and those 171 donors
+carry twice the weight of the rest in every percentile the read-based bundle stores. The pairs are not byte-identical
+copies — each deposit profiles the specimen from a differently partitioned set of sequencing runs — so they were not
+de-duplicated, but they are detected and they are held out together whenever one of the two studies is left out
+(`docs/validation.md` section 2).
 
 The output for a sample is, per layer, the percentile of every detected feature within the reference distribution, a
 call (`within`, `low`, `high`, or `expected_but_missing`), and one sample-level test: whether the fraction of features
@@ -161,10 +169,13 @@ between re-measurements of the same reads than percentiles are.
 ## What has been validated, and what has not
 
 The numbers below come from the validation runs that `docs/validation.md` describes report by report, each run's output
-being copied verbatim into `docs/reports/`, and they agree with the manuscript in `paper/`. One of those copies lags
-behind the run it records. The read-based case/control figures quoted here follow the run of 2026-10-06, whereas
-`docs/reports/reads_calibration_and_evaluation.md` and section 4 of `docs/validation.md` still carry the run of
-2026-09-30, whose taxonomy comparison reads 0.690 at p = 0.052 rather than 0.693 at p = 0.039.
+being copied verbatim into `docs/reports/`, and they agree with the manuscript in `paper/`. The four read-based reports
+(`reads_calibration_and_evaluation.md`, `reads_disease_atlas.md`, `reads_healthy_strata.md`,
+`reads_disease_by_stratum.md`) were re-copied on 2026-10-06 from the run of that date, which supersedes every earlier
+read-based figure quoted anywhere in this repository, including the 0.690 at p = 0.052 of 2026-09-30 and the 0.693 at
+p = 0.039 of earlier on 2026-10-06. That run differs from the one before it for one reason: the out-of-sample scoring
+was changed so that no study is split across two baselines and so that two curatedMetagenomicData 3 deposits of one
+donor cohort are held out together (`docs/validation.md` section 2).
 
 - Re-measuring public samples from raw reads with the assembly-based pipeline container and scoring them reproduces
   scores obtained from the original MGnify analyses (61 samples; percentile Spearman 0.98–0.99 on gene layers, 0.86–0.88
@@ -179,11 +190,12 @@ behind the run it records. The read-based case/control figures quoted here follo
 - Reference-relative features separate cases from controls only modestly better than raw abundances. With a random
   forest trained leave-one-study-out, the assembly-based pipeline reaches an AUROC of 0.618 against 0.581 for raw
   abundances (9 of 11 studies, p = 0.021 uncorrected), and 0.615 against 0.581 on the strict baseline (p = 0.051). The
-  read-based taxonomy reaches 0.693 against 0.664 over 14 studies (10 of them, p = 0.039), and 0.771 against 0.715 in
-  colorectal cancer alone (p = 0.004). That advantage is specific to the classifier and nothing more is claimed for it,
-  because a matched L1-penalised model does not reproduce it (0.719 against 0.705, p = 0.33); what the percentiles buy
-  is an output that can be read, at about half the features for the same accuracy. Nothing is added by the function
-  layers on top of the taxa, so their place is earned by what they make readable rather than by what they predict.
+  read-based taxonomy reaches 0.688 against 0.664 over 14 studies (10 of them, p = 0.034), and 0.770 against 0.715 in
+  colorectal cancer alone (8 of 9, p = 0.004). That advantage is specific to the classifier and nothing more is claimed
+  for it, because a matched L1-penalised model does not reproduce it (0.720 against 0.705, two-sided p = 0.30); what the
+  percentiles buy is an output that can be read, at about half the features for the same accuracy (a median of 104.5
+  non-zero coefficients against 204). Nothing is added by the function layers on top of the taxa, so their place is
+  earned by what they make readable rather than by what they predict.
   They are not weak in themselves: on the assembly-based pipeline, whose taxonomy stops at genus, the gene layers alone
   are the stronger ones, reaching 0.631 against 0.585 for the taxa. Of 43 known-biology expectations tested on that
   pipeline, 14 were confirmed.

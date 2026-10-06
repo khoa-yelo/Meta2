@@ -7,7 +7,11 @@ each measurement against its own baseline, and see whether the two reports agree
 
 The bridge is work/s11/pipeB/samples.tsv, which carries the MGnify analysis_id beside the cMD3 sample_key, so a sample
 present in both can be matched. Both sides are scored out of sample (s12 scores pool studies against a baseline rebuilt
-without them), so neither report is inflated by having seen the sample.
+without them), so neither report is inflated by having seen the sample. Four of the bridge samples need the stronger
+form of that guarantee, and get it: NielsenHB_2014_MH0050 and _MH0054 also sit in the pool as LeChatelierE_2013
+specimens (the two studies are two cMD3 deposits of one MetaHIT cohort), and GuptaA_2019_GupDM_HCQ and _HDF also sit in
+it as DhakanDB_2019 specimens, so s12 scores all four against a baseline rebuilt without the duplicate's study as well
+as without their own (work/s11/pipeB/cross_study_duplicates.tsv, s11_cross_study_duplicates.py).
 
 Two things are measured, and they answer differently:
   ranking  — Spearman rho between the two sets of percentiles, over the features both pipelines assess

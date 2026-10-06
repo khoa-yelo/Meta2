@@ -109,8 +109,8 @@ fig1 <- function() {
     box(1.25, 2.95, 0.56, 0.95, "assembly pipeline", "MGnify v5 workflow: assemble,\ncall genes, annotate", PA_BG, PA) +
     box(1.25, 2.95, 0.08, 0.47, "read pipeline", "curatedMetagenomicData 3 workflow:\nMetaPhlAn 3 and HUMAnN 3", PB_BG, PB) +
     arr(2.97, 0.755, 3.19, 0.755) + arr(2.97, 0.275, 3.19, 0.275) +
-    box(3.2, 4.88, 0.56, 0.95, "scored against healthy adults", "1,941 adults, 26 studies;\nstatistics only, no samples", NEUT_BG, PA) +
-    box(3.2, 4.88, 0.08, 0.47, "scored against healthy adults", "6,494 adults, 19 studies;\nstatistics only, no samples", NEUT_BG, PB) +
+    box(3.2, 4.88, 0.56, 0.95, "scored against the reference", "1,941 adults, 26 studies;\nstatistics only, no samples", NEUT_BG, PA) +
+    box(3.2, 4.88, 0.08, 0.47, "scored against the reference", "6,494 adults, 19 studies;\nstatistics only, no samples", NEUT_BG, PB) +
     seg(4.9, 0.755, 4.99, 0.755) + seg(4.9, 0.275, 4.99, 0.275) + seg(4.99, 0.275, 4.99, 0.755) + arr(4.99, 0.515, 5.11, 0.515) +
     geom_polygon(data = rr(5.12, 7.13, 0.08, 0.95), aes(x, y), fill = "white", colour = INK2, linewidth = 0.35) +
     annotate("text", 5.21, 0.925, label = "report for every feature", size = pt(6.8), fontface = "bold", family = FONT, colour = INK, hjust = 0, vjust = 1)
@@ -124,7 +124,7 @@ fig1 <- function() {
   for (i in 1:3) a <- a + range_row(6.1, 6.65, rows$y[i], 6.1, 6.27, 6.47, 6.65, 6.37, rows$s[i], rows$col[i]) +
     annotate("text", 5.21, rows$y[i], label = rows$lab[i], hjust = 0, size = pt(6.2), family = FONT, colour = INK2, fontface = rows$face[i]) +
     annotate("text", 6.83, rows$y[i], label = rows$call[i], hjust = 0, size = pt(6.2), family = FONT, colour = rows$col[i], fontface = "bold")
-  a <- a + annotate("text", 6.375, 0.115, label = "healthy range", size = pt(6.0), family = FONT, colour = MUTED, vjust = 0)
+  a <- a + annotate("text", 6.375, 0.115, label = "reference range", size = pt(6.0), family = FONT, colour = MUTED, vjust = 0)
 
   # b: how one feature is placed
   m <- jnum(file.path(D, "f1_density_meta.json")); dz <- read_csv(file.path(D, "f1_density.csv"))
@@ -135,14 +135,22 @@ fig1 <- function() {
     # the annotation that labels the sample; the two shared a column and their glyphs interleaved
     annotate("segment", x = c(m[["2_5"]], m[["97_5"]]), xend = c(m[["2_5"]], m[["97_5"]]), y = 0, yend = 1.04, colour = MUTED, linewidth = 0.3, linetype = "22") +
     annotate("text", x = c(m[["2_5"]], m[["97_5"]]), y = 1.07, label = c("2.5th", "97.5th"), size = pt(6), family = FONT, colour = INK2, vjust = 0) +
-    annotate("text", x = -0.6, y = 0.3, label = "healthy\nrange", size = pt(6.2), family = FONT, colour = INK2, lineheight = 0.95) +
+    annotate("text", x = -0.6, y = 0.3, label = "reference\nrange", size = pt(6.2), family = FONT, colour = INK2, lineheight = 0.95) +
     annotate("segment", x = m$sample, xend = m$sample, y = 0, yend = 1.33, colour = LOW, linewidth = 0.6) +
     annotate("point", x = m$sample, y = 0, colour = "white", fill = LOW, shape = 21, size = 2.2, stroke = 0.3) +
     annotate("text", x = m$sample + 0.3, y = 1.6, label = paste0("this sample: ", fold_lab(m$sample), "\n(", pct_lab(m$pct), ")"), hjust = 0, vjust = 1,
              size = pt(6.2), family = FONT, colour = LOW, lineheight = 0.95) +
     scale_x_continuous(breaks = c(-8, -4, 0, 4), labels = log2_axis, limits = c(-10.5, 5.5), expand = c(0, 0)) +
     scale_y_continuous(limits = c(0, 1.62), expand = c(0, 0)) +
-    labs(x = "relative to the typical healthy adult", y = NULL,
+    # The axis names its unit. For a family the plotted quantity is a difference of centred log-ratios (prep.py writes
+    # (clr - p50)/log 2, and refmb/normalize.py defines clr = log p - mean log p over the basis), so 2^x is the ratio of
+    # CLR-normalised values, not the ratio of relative abundances: this sample's Oscillospiraceae is 364x lower on that
+    # scale and 59x lower on proportion_mapped against the pool median. The band, the ticks and the percentile all live in
+    # the same CLR space, which is the only space the shipped reference stores for taxa, so the unit is named rather than
+    # the number changed.
+    # two lines: the one-line form is 170 pt wide against the 136 pt this panel can give an axis title, and the leading
+    # word was being clipped at the figure's left edge
+    labs(x = "relative to the reference median\n(centred log-ratio)", y = NULL,
          title = expression(bold("placing one feature: ") * bolditalic("Oscillospiraceae"))) +
     theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), panel.grid = element_blank(), panel.grid.major = element_blank())
 
@@ -150,7 +158,7 @@ fig1 <- function() {
   XL <- c(-14, 8.5); cl <- function(v) pmin(pmax(v, XL[1]), XL[2])
   r <- read_csv(file.path(D, "f1_report.csv")) %>% mutate(call = ifelse(is.na(x), "absent", call))
   r$label <- sub("^lysine racemase.*", "lysine racemase (K20707)", r$label); r$label <- sub("^ECF sigma.*", "ECF sigma factor (K03088)", r$label)
-  r <- r %>% mutate(txt = ifelse(call == "absent", "absent; carried by most healthy adults", paste0(fold_lab(x), " · ", pct_lab(pct))),
+  r <- r %>% mutate(txt = ifelse(call == "absent", "absent; carried by most reference adults", paste0(fold_lab(x), " · ", pct_lab(pct))),
                     layer = factor(ifelse(layer == "Families", "taxa", "genes"), c("taxa", "genes")),
                     across(c(lo99, lo, q1, q3, hi, hi99), cl))
   fam <- grepl("^taxa", r$layer) & r$call != "absent"; gen <- grepl("^genes", r$layer)
@@ -171,7 +179,10 @@ fig1 <- function() {
     scale_y_discrete(labels = ital_lab(as.character(r$label[r$layer == "taxa"]))) +
     scale_x_continuous(breaks = c(-12, -8, -4, 0, 4, 8), labels = log2_axis, expand = c(0, 0)) +
     coord_cartesian(xlim = XL, clip = "off") +
-    labs(x = "relative to the typical healthy adult (median)", y = NULL,
+    # The two facets share one axis but not one unit: the taxa rows are differences of centred log-ratios (fig17_range_report
+    # rows(), x = (clr - p50)/log 2), the gene rows are plain log2 ratios of copies per genome (x = log2(value/median)).
+    # Only the taxa half needs naming, so the parenthesis qualifies it alone.
+    labs(x = "relative to the reference median; taxa in centred log-ratio", y = NULL,
          title = expression(bold("report for one ") * bolditalic("C. difficile") * bold(" infection patient (excerpt)"))) +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5),
           # the two-row gene facet gives its rotated label a band shorter than the word, and "genes" was being clipped to
@@ -258,7 +269,7 @@ fig2 <- function() {
     facet_wrap(~pipeline, ncol = 1, scales = "free_y") + scale_shape_manual(values = c(16, 1), name = NULL) +
     scale_y_discrete(expand = expansion(add = c(0.45, 0.7))) +
     scale_x_continuous(limits = c(0, 25), breaks = c(0, 5, 10, 15, 20, 25), labels = function(x) paste0(x, "%"), expand = c(0, 0.3)) +
-    labs(x = "features outside the healthy range", y = NULL, title = "calibration (5 % expected)") +
+    labs(x = "features outside the reference range", y = NULL, title = "calibration (5 % expected)") +
     theme(legend.position = "bottom", legend.text = element_text(size = 6), panel.grid.major.y = element_blank(),
           axis.text.y = element_text(size = 6.2, colour = INK2), strip.text = element_text(size = 6.5, face = "plain", colour = INK2))
 
@@ -361,7 +372,7 @@ fig4 <- function() {
     # a hair of left pad, so that the six control markers that sit at exactly 0 % are drawn whole rather than bisected by
     # the panel border; those markers carry the claim that three families rise in no control at all
     scale_x_continuous(limits = c(0, 68), breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0.018, 0))) +
-    labs(x = "patients outside the healthy range (cases, n = 56)", y = NULL,
+    labs(x = "patients outside the reference range (cases, n = 56)", y = NULL,
          title = expression(bolditalic("C. difficile") * bold(" infection, one cohort (assembly pipeline)"))) +
     guides(fill = guide_legend(order = 1, nrow = 1, keywidth = unit(6, "pt"), keyheight = unit(6, "pt")), shape = guide_legend(order = 2)) +
     theme(legend.position = "bottom", legend.box = "horizontal", legend.box.just = "top", legend.spacing.x = unit(5, "pt"),
@@ -451,7 +462,7 @@ fig5 <- function() {
     # the dashed rule is named in the title, as it is in Fig. 2c, rather than labelled inside the panel: at the only y
     # that cleared the top box the label fell outside the panel altogether, into the facet strip's band, where it read as
     # a third item in the strip's own header row instead of as a note on the rule
-    labs(x = "features outside the healthy range, per sample", y = NULL, title = "share of each sample outside the range (5 % expected)") +
+    labs(x = "features outside the reference range, per sample", y = NULL, title = "share of each sample outside the range (5 % expected)") +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.4, lineheight = 0.95),
           strip.text = element_text(size = 6.5, face = "plain", colour = INK2), plot.margin = margin(2, 26, 2, 2))
   hdr <- data.frame(layer = factor("bacterial families", levels(fr$layer)), g = factor(st[[3]], levels(fr$g)))
@@ -494,7 +505,7 @@ fig5 <- function() {
     scale_y_discrete(labels = ital_lab(ital)) +
     # enough left pad for the open circle of a comparator that sits at exactly 0 %, which the border otherwise clips
     scale_x_continuous(limits = c(0, 78), breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0.045, 0))) +
-    labs(x = "samples outside the healthy range", y = NULL, title = "the genera and gene families behind the shift") +
+    labs(x = "samples outside the reference range", y = NULL, title = "the genera and gene families behind the shift") +
     guides(fill = guide_legend(order = 1, ncol = 1, keywidth = unit(6, "pt"), keyheight = unit(6, "pt")),
            shape = guide_legend(order = 2, ncol = 1, override.aes = list(size = c(1.5, 0.85), fill = c("white", INK), stroke = c(0.45, 0.3)))) +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5), legend.position = "right",

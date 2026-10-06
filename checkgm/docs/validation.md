@@ -27,6 +27,31 @@ A baseline is only usable if a new sample can be measured the same way the pool 
 
 Expectation: about 5 % of features outside the 2.5–97.5 percentile band; the gate used during development was 8 % per study.
 
+Every figure in sections 2 to 4 rests on one condition — that no sample was scored against a baseline holding it — and
+that condition is only as good as the test for whether two deposits are the same specimen. In the read-based pipeline
+they are tested two ways and the results unioned (`project/scripts/s11_cross_study_duplicates.py`, output
+`work/s11/pipeB/cross_study_duplicates.tsv`): a shared ENA or SRA run accession, and an identical
+(`number_reads`, `number_bases`) pair in the cMD3 metadata. Neither test alone is enough. The audit finds 201 pairs
+among the 9,123 scored samples. 30 are DhakanDB_2019 / GuptaA_2019, caught by both tests, and the profiles are
+effectively identical (species Bray–Curtis similarity 0.9999 to 1.00). The other 171 are LeChatelierE_2013 /
+NielsenHB_2014, two curatedMetagenomicData 3 deposits of one MetaHIT Danish cohort: all 171 agree on cMD3 sample id,
+subject id, country, sequencing platform, `number_reads` and `number_bases`, but each deposit profiles the specimen
+from a differently partitioned set of runs (MH0006, for instance, from 6 runs in one deposit and 12 in the other, with
+no accession in common), so the two profiles differ — Bray–Curtis similarity median 0.90, minimum 0.69 — and only
+MH0001 to MH0005 share any run accession at all. An accession-only audit therefore records 5 of those 171 pairs, which
+is what this project did until 2026-10-06.
+
+Two consequences follow, and both are now handled in `project/scripts/s12_oos_scores.py`. A leave-one-study-out
+baseline holds out every study that shares a specimen with the one being scored, not only that study, so the two
+MetaHIT deposits are held out together; and the exclusion applies to a whole study rather than to its duplicated
+samples alone, so a study's cases and its controls are never scored against two different baselines. Checked sample by
+sample, 0 of the 9,123 scored samples now sees itself or another deposit of itself in its baseline, against 342 under
+the per-sample rule, and no study is split across two baselines, against GuptaA_2019 under the per-sample rule.
+
+One fact about the pool composition is not a leakage question and remains: 342 of the 6,494 read-based pool samples are
+171 mirrored pairs, so the pool holds **6,323 distinct specimens**, and those 171 donors carry twice the weight of the
+rest. Two MetaCardis_2020_a pool samples have no row in the cMD3 metadata table and cannot be audited either way.
+
 - **Assembly** — `reports/assembly_heldout_calibration_check.md` (three held-out healthy studies, 233 samples; per layer and
   study the mean fraction outside and whether it passes) and `reports/assembly_loso_within_pool.md` (each pool study scored
   against a reference rebuilt without it: medians 0.05–0.055 on all layers except module; 73–85 % of studies within 8 %).
@@ -49,9 +74,9 @@ the read-based evaluation below uses 14 studies with at least 20 cases and 20 co
 cohort, see `configs/evaluation_settings.md`). Reference-relative features win
 modestly: macro-mean AUROC 0.618 vs 0.581 for raw abundances (one-sided Wilcoxon p = 0.021); on the strict baseline the
 difference is not significant (p = 0.051). Gene layers alone are at least as good as all layers (0.631). For the read-based
-baseline the taxonomy comparison is 0.690 vs 0.664 (p = 0.052), and 0.769 vs 0.715 (p = 0.004) when restricted to
-colorectal cancer studies (`reports/reads_calibration_and_evaluation.md`). Function layers show no advantage in either
-pipeline.
+baseline the taxonomy comparison is 0.688 vs 0.664 (10 of 14 studies, p = 0.034), and 0.770 vs 0.715 (8 of 9, p = 0.004)
+when restricted to colorectal cancer studies (`reports/reads_calibration_and_evaluation.md`, the run of 2026-10-06 16:12
+UTC). Function layers show no advantage in either pipeline.
 
 `reports/assembly_disease_atlas.md` and `reports/reads_disease_atlas.md`: for every case/control study, the share of cases
 and controls flagged by the sample-level excess test, the median fraction outside, and per-feature deviations.

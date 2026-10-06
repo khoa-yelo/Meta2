@@ -1,4 +1,4 @@
-# S14 — disease deviations by age, sex, BMI and location, pipeline B — 2026-09-30 00:27 UTC
+# S14 — disease deviations by age, sex, BMI and location, pipeline B — 2026-10-06 16:18 UTC
 
 15 case/control studies (>= 15 cases and >= 15 controls), 1,437 samples. A study x level cell is analysed when it holds >= 10 cases and >= 10 controls: 63 cells in 15 studies.
 
@@ -51,9 +51,9 @@
 | FengQ_2015             | CRC          | age_bin    |             2 |       4520 |                        0.883 |                 132 |       1     |                     1     |                            0.978 |
 | FengQ_2015             | CRC          | bmi_class  |             2 |       3466 |                        0.647 |                 126 |       1     |                     0.944 |                            0.948 |
 | FengQ_2015             | CRC          | sex        |             2 |       4232 |                        0.887 |                 132 |       1     |                     1     |                            0.975 |
-| GuptaA_2019            | CRC          | age_bin    |             1 |       1308 |                        0.919 |                 317 |       0.997 |                     0.943 |                            0.988 |
-| GuptaA_2019            | CRC          | bmi_class  |             1 |       2207 |                        0.951 |                 433 |       1     |                     0.998 |                            0.999 |
-| GuptaA_2019            | CRC          | sex        |             2 |       1349 |                        0.94  |                 288 |       1     |                     0.993 |                            0.953 |
+| GuptaA_2019            | CRC          | age_bin    |             1 |       1308 |                        0.919 |                 311 |       0.997 |                     0.945 |                            0.988 |
+| GuptaA_2019            | CRC          | bmi_class  |             1 |       2207 |                        0.951 |                 421 |       1     |                     0.993 |                            1     |
+| GuptaA_2019            | CRC          | sex        |             2 |       1349 |                        0.939 |                 283 |       1     |                     0.993 |                            0.953 |
 | HMP_2019               | IBD          | sex        |             2 |         25 |                        0.647 |                   0 |     nan     |                   nan     |                          nan     |
 | HanniganGD_2017        | CRC          | age_bin    |             1 |       1691 |                        0.765 |                   0 |     nan     |                   nan     |                          nan     |
 | HanniganGD_2017        | CRC          | sex        |             1 |       1076 |                        0.631 |                   0 |     nan     |                   nan     |                          nan     |
@@ -108,16 +108,16 @@
 
 | condition   | variable   | level      |   features |   studies |   share_same_direction |   median_abs_shift |
 |:------------|:-----------|:-----------|-----------:|----------:|-----------------------:|-------------------:|
-| CRC         | age_bin    | 40-64      |        203 |         8 |                  0.966 |             11.501 |
-| CRC         | age_bin    | 65+        |        203 |         6 |                  0.946 |             13.09  |
-| CRC         | bmi_class  | 18.5-25    |        203 |         7 |                  0.995 |             13.704 |
-| CRC         | bmi_class  | 25-30      |        202 |         4 |                  0.95  |              8.594 |
-| CRC         | region     | E. Asia    |        202 |         1 |                  0.738 |              5.142 |
-| CRC         | region     | Europe     |        203 |         5 |                  0.995 |             14.074 |
-| CRC         | region     | N. America |        203 |         2 |                  0.818 |              5.151 |
-| CRC         | region     | S. Asia    |        191 |         1 |                  0.969 |             25.468 |
-| CRC         | sex        | female     |        202 |         6 |                  0.941 |             11.201 |
-| CRC         | sex        | male       |        203 |         9 |                  0.995 |             11.937 |
+| CRC         | age_bin    | 40-64      |        199 |         8 |                  0.965 |             11.527 |
+| CRC         | age_bin    | 65+        |        199 |         6 |                  0.945 |             13.154 |
+| CRC         | bmi_class  | 18.5-25    |        199 |         7 |                  0.995 |             13.812 |
+| CRC         | bmi_class  | 25-30      |        198 |         4 |                  0.949 |              8.868 |
+| CRC         | region     | E. Asia    |        198 |         1 |                  0.747 |              5.198 |
+| CRC         | region     | Europe     |        199 |         5 |                  0.995 |             14.087 |
+| CRC         | region     | N. America |        199 |         2 |                  0.829 |              5.303 |
+| CRC         | region     | S. Asia    |        187 |         1 |                  0.968 |             25.115 |
+| CRC         | sex        | female     |        198 |         6 |                  0.939 |             11.17  |
+| CRC         | sex        | male       |        199 |         9 |                  0.995 |             11.96  |
 
 (features = atlas-consistent features assessable in the level; share_same_direction = share whose median shift over studies has the atlas direction)
 
@@ -137,18 +137,18 @@
 | CRC          | pathway_humann   | bmi_class  | 25-30   |         4 |  0.022 |     0.038 |
 | CRC          | pathway_humann   | sex        | female  |         6 |  0.022 |     0.027 |
 | CRC          | pathway_humann   | sex        | male    |         9 |  0.032 |     0.026 |
-| CRC          | taxonomy_family  | age_bin    | 40-64   |         8 |  0.059 |     0.051 |
+| CRC          | taxonomy_family  | age_bin    | 40-64   |         8 |  0.059 |     0.053 |
 | CRC          | taxonomy_family  | age_bin    | 65+     |         6 |  0.069 |     0.058 |
 | CRC          | taxonomy_family  | bmi_class  | 18.5-25 |         7 |  0.061 |     0.065 |
 | CRC          | taxonomy_family  | bmi_class  | 25-30   |         4 |  0.048 |     0.04  |
-| CRC          | taxonomy_family  | sex        | female  |         6 |  0.078 |     0.048 |
-| CRC          | taxonomy_family  | sex        | male    |         9 |  0.05  |     0.065 |
-| CRC          | taxonomy_genus   | age_bin    | 40-64   |         8 |  0.058 |     0.06  |
+| CRC          | taxonomy_family  | sex        | female  |         6 |  0.078 |     0.059 |
+| CRC          | taxonomy_family  | sex        | male    |         9 |  0.066 |     0.065 |
+| CRC          | taxonomy_genus   | age_bin    | 40-64   |         8 |  0.066 |     0.067 |
 | CRC          | taxonomy_genus   | age_bin    | 65+     |         6 |  0.064 |     0.066 |
-| CRC          | taxonomy_genus   | bmi_class  | 18.5-25 |         7 |  0.059 |     0.066 |
+| CRC          | taxonomy_genus   | bmi_class  | 18.5-25 |         7 |  0.059 |     0.067 |
 | CRC          | taxonomy_genus   | bmi_class  | 25-30   |         4 |  0.066 |     0.054 |
 | CRC          | taxonomy_genus   | sex        | female  |         6 |  0.074 |     0.061 |
-| CRC          | taxonomy_genus   | sex        | male    |         9 |  0.058 |     0.065 |
+| CRC          | taxonomy_genus   | sex        | male    |         9 |  0.06  |     0.073 |
 | CRC          | taxonomy_species | age_bin    | 40-64   |         8 |  0.061 |     0.053 |
 | CRC          | taxonomy_species | age_bin    | 65+     |         6 |  0.074 |     0.066 |
 | CRC          | taxonomy_species | bmi_class  | 18.5-25 |         7 |  0.071 |     0.064 |
@@ -262,4 +262,4 @@
 | schizofrenia | taxonomy_species | sex        | female  |         1 |  0.061 |     0.055 |
 | schizofrenia | taxonomy_species | sex        | male    |         1 |  0.067 |     0.067 |
 
-Wall 72s.
+Wall 64s.
