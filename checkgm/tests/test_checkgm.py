@@ -141,3 +141,65 @@ def test_cli_run_metaphlan_with_env_lookup(bundle, tmp_path, monkeypatch):
     assert "# checkgm report" in (out / "report.md").read_text()
     bad = subprocess.run([sys.executable, "-m", "checkgm.cli", "score", "--bundle", "no-such-bundle", "--normalized", str(out), "--out", str(tmp_path / "x")], capture_output=True, text=True, env=env)
     assert bad.returncode != 0 and "not found" in (bad.stderr + bad.stdout)
+
+
+def test_calls_and_percentiles_follow_the_reference_quantiles(bundle, tmp_path):
+    """End-to-end semantics of scoring, which the suite otherwise leaves unpinned: a value below the reference p2.5 is
+    low, above p97.5 is high, in between is within, and the percentile tracks where the value sits rather than being a
+    constant. Mutation-tested: swapping the low/high branches, widening the band to p10-p90, or replacing the
+    interpolation with a constant each make this fail, and each used to leave the whole suite green."""
+    spec = ReadsBundleSpec(bundle)
+    t = pd.DataFrame({"species_name": [n for _, _, _, n in SPECIES], "taxid": [str(s) for s, _, _, _ in SPECIES],
+                      "rel_abundance": [40.0, 25.0, 20.0, 10.0, 4.0, 1.0]})
+    n = normalize_profile("S1", t, 50_000_000, spec)
+
+    ref = pd.read_parquet(os.path.join(bundle, "features", "taxonomy_family.parquet")).set_index("feature_id")
+    fam = n["taxonomy_family"].copy()
+    want = {}
+    for i, fid in enumerate(fam["feature_id"]):
+        r = ref.loc[fid]
+        place = ["below", "above", "median", "p95", "within"][i % 5]
+        v = {"below": r["p2_5"] - 1.0, "above": r["p97_5"] + 1.0, "median": r["p50"],
+             "p95": r["p95"], "within": r["p75"]}[place]
+        fam.loc[fam["feature_id"] == fid, "clr"] = v
+        want[fid] = place
+    n["taxonomy_family"] = fam
+
+    out = score({"S1": n}, Bundle(bundle))
+    got = out["scores"].query("layer == 'taxonomy_family'").set_index("feature_id")
+    assert len(got) == len(want)
+    for fid, place in want.items():
+        call, pct = got.loc[fid, "call"], got.loc[fid, "percentile"]
+        if place == "below":
+            assert call == "low", (fid, call, pct)
+        elif place == "above":
+            assert call == "high", (fid, call, pct)
+        else:
+            assert call == "within", (fid, place, call, pct)   # p95 is inside a 2.5-97.5 band
+        if place == "median":
+            assert pct == pytest.approx(50.0, abs=1e-6), (fid, pct)
+        if place == "p95":
+            assert pct == pytest.approx(95.0, abs=1e-6), (fid, pct)
+
+
+def test_expected_but_missing_honours_the_prevalence_threshold(tmp_path):
+    """A feature the sample lacks is called expected-but-missing only where the reference carries it in at least 70 %
+    of its size class. A feature carried by half the class is simply absent, not a finding. Built on its own bundle so
+    the edited prevalence does not leak into the shared fixture; mutating MISSING_PREV makes this fail."""
+    b = make_bundle(str(tmp_path / "b"), seed=3)
+    fp = os.path.join(b, "features", "taxonomy_species.parquet")
+    ref = pd.read_parquet(fp)
+    common, uncommon = ref["feature_id"].iloc[0], ref["feature_id"].iloc[1]
+    for band in ("low", "medium", "high"):                       # one feature sits between the two thresholds
+        ref.loc[ref["feature_id"] == uncommon, f"prevalence_band_{band}"] = 0.50
+    ref.to_parquet(fp, index=False)
+
+    spec = ReadsBundleSpec(b)
+    keep = [(s, g, f, n) for s, g, f, n in SPECIES if str(s) not in (common, uncommon)]
+    t = pd.DataFrame({"species_name": [n for _, _, _, n in keep], "taxid": [str(s) for s, _, _, _ in keep],
+                      "rel_abundance": [40.0, 30.0, 20.0, 10.0][:len(keep)]})
+    n = normalize_profile("S1", t, 50_000_000, spec)
+    got = score({"S1": n}, Bundle(b))["scores"].query("layer == 'taxonomy_species'").set_index("feature_id")
+
+    assert got.loc[common, "call"] == "expected_but_missing", got.loc[common].to_dict()
+    assert got.loc[uncommon, "call"] != "expected_but_missing" if uncommon in got.index else True

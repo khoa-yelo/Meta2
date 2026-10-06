@@ -139,8 +139,16 @@ def normalize(sample_id: str, contigs: pd.DataFrame, cds: pd.DataFrame, cds_tax:
         b = prop.reindex(basis).fillna(0.0)
         z = int((b == 0).sum())
         delta = rules["clr_delta_fraction_of_min"] * (b[b > 0].min() if (b > 0).any() else 1.0)
-        rep = np.where(b > 0, b * (1 - z * delta), delta)
-        clr = np.log(rep) - np.log(rep).mean()
+        # Multiplicative replacement is defined only while the mass imputed to the zeros, z * delta, stays below the
+        # observed total. It does not when a sample detects few of the basis features: every positive entry then goes
+        # negative and the whole layer becomes NaN. That used to be reported as a successful scoring, with NaN
+        # percentiles, a landscape position computed from the NaN vector and an empty rejections.tsv. No analysis of
+        # either baseline comes near the condition (the largest z * delta over the 8,742 assembly analyses is 0.044),
+        # so a sample that trips it is not one the reference can place; it is rejected below, as the read path already
+        # rejects a profile with nothing placed.
+        with np.errstate(invalid="ignore", divide="ignore"):
+            rep = np.where(b > 0, b * (1 - z * delta), delta)
+            clr = np.log(rep) - np.log(rep).mean()
         return pd.DataFrame({"feature_id": b.index, "proportion_mapped": b.to_numpy(), "clr": clr, "rank": rank})
 
     out = {f"taxonomy_{r}": clr_table(r) for r in spec.basis}
@@ -182,6 +190,9 @@ def normalize(sample_id: str, contigs: pd.DataFrame, cds: pd.DataFrame, cds_tax:
     if markers_detected < fl["min_markers_detected"]: rej.append(("NO_MARKER_PANEL_SIGNAL", f"< {fl['min_markers_detected']} kept marker KOs detected"))
     if not (ge >= fl["min_genome_equivalents"]): rej.append(("NO_MARKER_PANEL_SIGNAL", f"genome equivalents < {fl['min_genome_equivalents']}"))
     if not (mapped_fraction[prim] >= fl["min_mapped_fraction"]): rej.append(("LOW_MAPPED_FRACTION", f"{prim} mapped fraction < {fl['min_mapped_fraction']}"))
+    undefined = sorted(r for r in out if r.startswith("taxonomy_") and not np.isfinite(out[r]["clr"].to_numpy()).all())
+    if undefined:   # too few basis features detected for the zero replacement to be defined; see clr_table above
+        rej.append(("TOO_FEW_TAXA_FOR_CLR", f"undefined centred log-ratio at {', '.join(r.split('_', 1)[1] for r in undefined)}"))
     if rej:
         status = rej[0][0]
     qc = {"sample_id": sample_id, "status": status, "rejections": rej, "quality_band": spec.band(total_len) if status == "retained" else "unbanded",

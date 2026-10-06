@@ -164,3 +164,31 @@ def test_run_normalize_matches_normalize_then_score(tmp_path):
     a = pd.read_parquet(two / "rep" / "scores.parquet").sort_values(["analysis_id", "layer", "feature_id"]).reset_index(drop=True)
     b = pd.read_parquet(one / "scores.parquet").sort_values(["analysis_id", "layer", "feature_id"]).reset_index(drop=True)
     pd.testing.assert_frame_equal(a, b)
+
+
+def test_too_few_taxa_is_rejected_not_scored_as_nan(tmp_path):
+    """A query whose taxonomy spans only one basis family passes every documented floor, but the multiplicative
+    replacement of zeros is then undefined (z * delta exceeds the observed mass) and every CLR is NaN. That used to be
+    reported as a successful scoring: NaN percentiles, a landscape position derived from the NaN vector, and an empty
+    rejections.tsv. It must be a rejection with a named reason, as the read path already does for an unplaceable
+    profile, and no bare numpy warning may reach stderr."""
+    bundle = make_bundle(str(tmp_path / "b")); q = tmp_path / "q"; write_query(str(q))
+    # collapse the taxonomy onto a single taxon, leaving every other floor satisfied
+    t = pd.read_csv(q / "cds_taxonomy.tsv", sep="\t")
+    t["taxid"] = TAXA[0][0]
+    t.to_csv(q / "cds_taxonomy.tsv", sep="\t", index=False)
+
+    r = run("normalize", "--bundle", bundle, "--query", str(q), "--out", str(tmp_path / "norm"))
+    assert r.returncode == 0, r.stderr
+    assert "RuntimeWarning" not in r.stderr and "invalid value" not in r.stderr, r.stderr
+
+    qc = pd.read_csv(tmp_path / "norm" / "qc.tsv", sep="\t")
+    assert qc["status"].eq("TOO_FEW_TAXA_FOR_CLR").all(), qc[["sample_id", "status"]].to_dict("records")
+
+    r = run("score", "--bundle", bundle, "--normalized", str(tmp_path / "norm"), "--out", str(tmp_path / "rep"))
+    assert r.returncode == 0, r.stderr
+    rej = pd.read_csv(tmp_path / "rep" / "rejections.tsv", sep="\t")
+    assert len(rej) == 1 and "centred log-ratio" in rej.iloc[0]["detail"], rej.to_dict("records")
+    # and nothing is passed off as a score
+    sc = pd.read_parquet(tmp_path / "rep" / "scores.parquet")
+    assert sc.empty or not sc["layer"].str.startswith("taxonomy").any(), sc.head().to_dict("records")
