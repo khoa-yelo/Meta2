@@ -2,7 +2,7 @@
 
 A *query* is one directory per sample holding the output of an assembly pipeline in four small tab-separated tables.
 It is the input of `checkgm normalize`, which turns it into normalized tables that `checkgm score` compares with an
-assembly-based bundle. The shipped container (`container/checkgm_tierA.def`, run script `run_tierA.sh`) writes this
+assembly-based bundle. The shipped container (`container/checkgm_assembly.def`, run script `run_assembly.sh`) writes this
 directory itself; the format is documented so that any other assembly pipeline can produce it. Tab-separated, header row
 required, UTF-8. Identifiers are the user's own; nothing depends on MGnify naming.
 

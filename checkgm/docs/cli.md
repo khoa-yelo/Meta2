@@ -66,7 +66,7 @@ the bundle's marker panel, quality band from total assembled length. Prints `sam
 
 Only meaningful against an assembly bundle (`gut-assembly-adult-global-*`). `checkgm run-normalize` takes the same
 arguments and runs `score` straight afterwards into the same directory, and it is the step that follows
-`container/run_tierA.sh`, which carries raw reads as far as a query directory and stops there without invoking checkgm
+`container/run_assembly.sh`, which carries raw reads as far as a query directory and stops there without invoking checkgm
 itself. The two-step form remains available for anyone who normalizes once and then scores the result against several
 bundles of a series.
 

@@ -5,7 +5,9 @@ This page says what each one tested and where its headline numbers are. Because 
 the development workspace's internal labels: S6 = the held-out calibration check (section 2), S7 = the excess-test survey over
 8,742 MGnify gut analyses (`assembly_all_gut_analyses_scoring.md`), S8 = the case/control evaluation (section 4), S11 = the
 reproduction from raw reads (section 1), S12 and S14 = the reference strata and the disease atlas (sections 3 and 4), "anchors"
-= samples measured by both pipelines, and "tier A" / "tier B" = the assembly-based / read-based pipeline.
+= samples measured by both pipelines. Outputs and workspace scripts produced before 2026-10-06 call the two pipelines
+"tier A" and "tier B", and some file names still carry those codenames; they mean the assembly-based and the read-based
+pipeline. The software itself now says only "assembly" and "read".
 
 ## 1. Does the pipeline reproduce the reference measurement from raw reads?
 

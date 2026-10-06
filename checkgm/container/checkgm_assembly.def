@@ -3,10 +3,10 @@ From: mambaorg/micromamba:1.5.8
 
 %labels
     Maintainer checkgm project
-    Description checkgm assembly-based pipeline (image checkgm_tierA.sif) — MGnify pipeline v5.0-equivalent assembly + annotation (metaSPAdes 3.15.3 w/ error correction | MEGAHIT 1.2.9; DIAMOND/UniRef90 2019_11; eggNOG-mapper 2.0.0; InterProScan 5.36-75.0 Pfam; KOfam KEGG 90; MGnify module completeness). Databases fetched separately (fetch_dbs.sh).
+    Description checkgm assembly-based pipeline (image checkgm_assembly.sif) — MGnify pipeline v5.0-equivalent assembly + annotation (metaSPAdes 3.15.3 w/ error correction | MEGAHIT 1.2.9; DIAMOND/UniRef90 2019_11; eggNOG-mapper 2.0.0; InterProScan 5.36-75.0 Pfam; KOfam KEGG 90; MGnify module completeness). Databases fetched separately (fetch_dbs_assembly.sh).
 
 %files
-    run_tierA.sh /opt/checkgm/run_tierA.sh
+    run_assembly.sh /opt/checkgm/run_assembly.sh
     pv5_to_query.py /opt/checkgm/pv5_to_query.py
     pv5_ref/tools_Assembly_KEGG_analysis_KEGG_pathways_give_pathways.py /opt/checkgm/pv5_ref/tools_Assembly_KEGG_analysis_KEGG_pathways_give_pathways.py
     emapper2 /opt/checkgm/emapper2
@@ -15,7 +15,7 @@ From: mambaorg/micromamba:1.5.8
     micromamba create -y -n py27 -c conda-forge python=2.7 && micromamba create -y -n java8 -c conda-forge openjdk=8 && micromamba install -y -n base -c conda-forge -c bioconda \
         python=3.8 spades=3.15.3 megahit=1.2.9 prodigal=2.6.3 fraggenescan=1.31 diamond=0.9.25 hmmer=3.2.1 trimmomatic=0.36 bwa-mem2 samtools \
         networkx biopython pandas pyarrow curl && micromamba clean -a -y
-    chmod +x /opt/checkgm/run_tierA.sh
+    chmod +x /opt/checkgm/run_assembly.sh
 
 %environment
     export PATH=/opt/conda/bin:/opt/checkgm:$PATH
@@ -25,11 +25,11 @@ From: mambaorg/micromamba:1.5.8
     export JAVA8_BIN=/opt/conda/envs/java8/bin
 
 %runscript
-    exec bash /opt/checkgm/run_tierA.sh "$@"
+    exec bash /opt/checkgm/run_assembly.sh "$@"
 
 %help
-    checkgm assembly-based pipeline container. Databases (~70 GB compressed) are not included: run fetch_dbs.sh <dbdir> once, unpack the
+    checkgm assembly-based pipeline container. Databases (about 90 GB to download, 170 GB unpacked) are not included: run fetch_dbs_assembly.sh <dbdir> once, unpack the
     .gz / InterProScan tarball there, then:
-      apptainer run --bind <dbdir>:/dbs,<work>:/work checkgm_tierA.sif --sample S --out /work/S --dbs /dbs --r1 /work/R1.fq.gz --r2 /work/R2.fq.gz
+      apptainer run --bind <dbdir>:/dbs,<work>:/work checkgm_assembly.sif --sample S --out /work/S --dbs /dbs --r1 /work/R1.fq.gz --r2 /work/R2.fq.gz
     Output /work/S/query is a checkgm query directory: score it with `checkgm run-normalize` against an assembly-based
-    bundle (gut-assembly-adult-global-*). Build from the container/ directory: cd container && apptainer build checkgm_tierA.sif checkgm_tierA.def
+    bundle (gut-assembly-adult-global-*). Build from the container/ directory: cd container && apptainer build checkgm_assembly.sif checkgm_assembly.def

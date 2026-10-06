@@ -6,7 +6,7 @@
 #   eggNOG-mapper 2.0.0 (-m diamond, --no_annot then --annotate_hits_table) with MGnify's eggnog.db / eggnog_proteins.dmnd
 #   InterProScan 5.36-75.0, Pfam application only | hmmsearch 3.2.1 --cut_ga vs KOfam (KEGG 90.0) | MGnify KEGG module completeness
 # Usage:
-#   run_tierA.sh --sample S --out OUTDIR --dbs DBDIR (--r1 R1.fq.gz [--r2 R2.fq.gz] | --contigs contigs.fasta) [--threads 16] [--mem-gb 120] [--skip-ips]
+#   run_assembly.sh --sample S --out OUTDIR --dbs DBDIR (--r1 R1.fq.gz [--r2 R2.fq.gz] | --contigs contigs.fasta) [--threads 16] [--mem-gb 120] [--skip-ips]
 set -euo pipefail
 THREADS=16; MEMGB=120; R1=""; R2=""; CONTIGS=""; SKIP_IPS=0; QC=auto; ASM=auto; EC=auto; SCRATCH=""   # --scratch: node-local dir for assembly and tool temp files (NFS made steps 5-10x slower)
 # Default profile (validated on anchors 2026-09-27): paired-end -> metaSPAdes 3.15.3 WITH read error correction; single-end -> MEGAHIT 1.2.9;
@@ -20,7 +20,7 @@ if [ "$ASM" = auto ] && [ -z "$CONTIGS" ]; then [ -n "$R2" ] && ASM=metaspades |
 [ "$QC" = auto ] && QC=0    # 2026-09-27: MEGAHIT without QC matched native single-end assemblies exactly (8.8/8.8 Mb, GE 24.5/24.5); QC is off by default for both layouts
 [ "$EC" = auto ] && { [ "$ASM" = metaspades ] && EC=1 || EC=0; }
 HERE=$(cd "$(dirname "$0")" && pwd); PY=${CHECKGM_PY:-python3}; EMPY=${EMAPPER_PY:-python2}   # eggNOG-mapper 2.0.0 as vendored by pipeline v5 is Python 2
-mkdir -p "$OUT"; cd "$OUT"; LOG="$OUT/tierA.log"; step() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
+mkdir -p "$OUT"; cd "$OUT"; LOG="$OUT/assembly.log"; step() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
 # a database file missing from a node-local cache falls back to the shared copy (a job's cache list can be older than its workflow snapshot)
 pick() { if [ -e "$DBS/$1" ]; then echo "$DBS/$1"; else echo "${DBS_FALLBACK:-$DBS}/$1"; fi; }
 ASMDIR="$OUT/asm"; TMPW="$OUT"; if [ -n "$SCRATCH" ]; then mkdir -p "$SCRATCH"; ASMDIR="$SCRATCH/asm"; TMPW="$SCRATCH"; export TMPDIR="$SCRATCH"; fi

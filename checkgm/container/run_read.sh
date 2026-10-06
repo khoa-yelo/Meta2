@@ -3,7 +3,7 @@
 # all reads of the sample given as unpaired input, as in curatedMetagenomicData 3), then checkgm import + score against a
 # read-based bundle. No read QC: the cMD3 profiles were produced from the deposited reads. Reads processed (both mates counted)
 # are counted from the input files and set the depth band. Optional HUMAnN 3 tables add the function layers.
-# Usage: run_pipelineB.sh --sample ID --r1 R1.fastq.gz [--r2 R2.fastq.gz] --dbs DIR --bundle BUNDLE --out DIR [--threads 8]
+# Usage: run_read.sh --sample ID --r1 R1.fastq.gz [--r2 R2.fastq.gz] --dbs DIR --bundle BUNDLE --out DIR [--threads 8]
 #        [--humann-genefamilies FILE] [--humann-pathabundance FILE]
 set -euo pipefail
 THREADS=8; R2=""; GF=""; PA=""; INDEX=mpa_v30_CHOCOPhlAn_201901
@@ -13,9 +13,9 @@ while [ $# -gt 0 ]; do case "$1" in
 : "${SAMPLE:?}" "${R1:?}" "${DBS:?}" "${BUNDLE:?}" "${OUT:?}"
 # checkgm: the installed console script (pip install checkgm), or CHECKGM_CLI=/path/to/cli.py run with CHECKGM_PY
 if [ -n "${CHECKGM_CLI:-}" ]; then CHECKGM="${CHECKGM_PY:-python3} $CHECKGM_CLI"; else CHECKGM=${CHECKGM_BIN:-checkgm}; fi
-mkdir -p "$OUT"; LOG="$OUT/pipelineB.log"; step() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
+mkdir -p "$OUT"; LOG="$OUT/read.log"; step() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
 metaphlan --version | tee -a "$LOG"; metaphlan --version | grep -q "version 3\.0\." || { echo "MetaPhlAn is not 3.0.x; the baseline was measured with MetaPhlAn 3 (mpa_v30)"; exit 3; }
-[ -e "$DBS/$INDEX.pkl" ] || { echo "marker database $INDEX not found in $DBS (run container/fetch_dbs_B.sh)"; exit 3; }
+[ -e "$DBS/$INDEX.pkl" ] || { echo "marker database $INDEX not found in $DBS (run container/fetch_dbs_read.sh)"; exit 3; }
 PROFILE="$OUT/$SAMPLE.txt"
 if [ ! -s "$PROFILE" ] || [ ! -s "$OUT/$SAMPLE.reads.tsv" ]; then step "MetaPhlAn 3"
   rm -f "$OUT/$SAMPLE.bowtie2.bz2"

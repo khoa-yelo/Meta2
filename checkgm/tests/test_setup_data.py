@@ -96,14 +96,14 @@ def server(tmp_path):
     httpd.shutdown()
 
 
-def stub_container(tmp_path, body, name="fetch_dbs_B.sh"):
-    """A container/ directory whose fetch script is `body`. fetch_dbs.sh must exist for container_dir() to accept it."""
+def stub_container(tmp_path, body, name="fetch_dbs_read.sh"):
+    """A container/ directory whose fetch script is `body`. fetch_dbs_assembly.sh must exist for container_dir() to accept it."""
     c = tmp_path / "container"
     c.mkdir(exist_ok=True)
-    for n in ("fetch_dbs.sh", "fetch_dbs_B.sh", "unpack_dbs.sh"):
+    for n in ("fetch_dbs_assembly.sh", "fetch_dbs_read.sh", "unpack_dbs.sh"):
         (c / n).write_text("#!/usr/bin/env bash\nexit 0\n")
     (c / name).write_text(body)
-    (c / name).chmod((c / name).stat().st_mode & ~stat.S_IXUSR)   # the real fetch_dbs_B.sh carries no executable bit
+    (c / name).chmod((c / name).stat().st_mode & ~stat.S_IXUSR)   # the real fetch_dbs_read.sh carries no executable bit
     return str(c)
 
 
@@ -138,7 +138,7 @@ def test_plan_states_the_measured_database_sizes():
     assert len(asm) == len(read) == 1
     assert asm[0]["download_bytes"] == 90437315335 and asm[0]["disk_bytes"] == 170047067806 and asm[0]["n_files"] == 24
     assert read[0]["download_bytes"] == 384430080 and read[0]["disk_bytes"] == 2936494131
-    assert asm[0]["item"] == "fetch_dbs.sh" and read[0]["item"] == "fetch_dbs_B.sh"
+    assert asm[0]["item"] == "fetch_dbs_assembly.sh" and read[0]["item"] == "fetch_dbs_read.sh"
     assert setup_data.plan("reads")[-1]["pipeline"] == "read"   # the bundles' word for the same pipeline
     assert setup_data.human_bytes(asm[0]["download_bytes"]) == "90.4 GB"
 
@@ -321,12 +321,12 @@ def test_record_id_comes_from_the_doi():
 def test_databases_dry_run_names_the_pinned_scripts(tmp_path, monkeypatch):
     monkeypatch.setenv(setup_data.CONTAINER_ENV, stub_container(tmp_path, "exit 0"))
     r = setup_data.databases("assembly", str(tmp_path / "dbs"), dry_run=True)
-    assert [os.path.basename(s["script"]) for s in r["steps"]] == ["fetch_dbs.sh", "unpack_dbs.sh"]
+    assert [os.path.basename(s["script"]) for s in r["steps"]] == ["fetch_dbs_assembly.sh", "unpack_dbs.sh"]
     assert r["steps"][0]["argv"][:1] == ["bash"] and r["steps"][0]["argv"][-1] == str(tmp_path / "dbs")
     assert r["download_bytes"] == 90437315335 and "missing_tools" in r
     assert not (tmp_path / "dbs").exists() and r["steps"][0]["returncode"] is None
     assert [os.path.basename(s["script"]) for s in setup_data.databases("read", str(tmp_path / "d2"), dry_run=True)["steps"]] \
-        == ["fetch_dbs_B.sh"]
+        == ["fetch_dbs_read.sh"]
 
 
 def test_databases_delegates_with_dest_as_the_argument(tmp_path, monkeypatch, capsys):
@@ -343,7 +343,7 @@ def test_databases_delegates_with_dest_as_the_argument(tmp_path, monkeypatch, ca
 
 def test_databases_reports_files_the_script_failed_to_fetch(tmp_path, monkeypatch):
     monkeypatch.setenv(setup_data.CONTAINER_ENV,
-                       stub_container(tmp_path, '#!/usr/bin/env bash\necho "[FAIL] eggnog.db"\nexit 0\n', "fetch_dbs.sh"))
+                       stub_container(tmp_path, '#!/usr/bin/env bash\necho "[FAIL] eggnog.db"\nexit 0\n', "fetch_dbs_assembly.sh"))
     monkeypatch.setattr(setup_data, "_missing_tools", lambda p: [])
     with pytest.raises(ValueError) as e:
         setup_data.databases("assembly", str(tmp_path / "dbs"))
@@ -365,7 +365,7 @@ def test_databases_refuses_a_run_without_its_tools_but_still_plans_one(tmp_path,
     assert setup_data.databases("read", str(tmp_path / "dbs"), dry_run=True)["missing_tools"] == ["bowtie2-build"]
     with pytest.raises(ValueError) as e:
         setup_data.databases("read", str(tmp_path / "dbs"))
-    assert "bowtie2-build" in str(e.value) and "checkgm_pipelineB.def" in str(e.value)
+    assert "bowtie2-build" in str(e.value) and "checkgm_read.def" in str(e.value)
 
 
 def test_missing_container_directory_says_where_to_get_it(tmp_path, monkeypatch):

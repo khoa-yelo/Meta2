@@ -6,7 +6,7 @@ recorded sha256, and is fetched here: `bundles()` downloads, verifies and unpack
 works as ``$CHECKGM_BUNDLES`` (paths.py looks for the directory holding manifest.json, which is what the archive unpacks
 to). The pipeline databases are four orders of magnitude larger and their provenance is a pinned list of EBI and cibio
 URLs that the container recipes were validated against; reimplementing that list here would let it drift from the
-pipeline, so `databases()` delegates to container/fetch_dbs.sh and container/fetch_dbs_B.sh and only reports what they did.
+pipeline, so `databases()` delegates to container/fetch_dbs_assembly.sh and container/fetch_dbs_read.sh and only reports what they did.
 
 Nothing large starts without the caller having been told the size: `plan()` answers "what would this download, and how
 big is it" from recorded figures alone, without touching the network, and every function takes ``dry_run``.
@@ -67,17 +67,18 @@ CONTAINER_ENV = "CHECKGM_CONTAINER"   # where container/ was unpacked, for an in
 # Database figures measured on the staged copy the baselines were built with (project/staging/dbs and dbs_mpa):
 # `download_bytes` sums the files the fetch script's URL list names, `disk_bytes` is what the directory holds after
 # unpack_dbs.sh, which keeps both the archive and the gunzipped copy (gunzip -k). Both are larger than the round numbers
-# in README.md ("about 70 GB compressed, 110 GB unpacked"), which predate the full eggNOG and InterProScan provisioning;
+# that README.md recorded before 2026-10-06 ("about 70 GB compressed, 110 GB unpacked"), which predate the full eggNOG
+# and InterProScan provisioning and have since been corrected there;
 # a caller shown too small a figure is exactly the failure plan() exists to prevent, so the measured values are used.
 DATABASES = {
-    "assembly": {"script": "fetch_dbs.sh", "then": "unpack_dbs.sh", "n_files": 24,
+    "assembly": {"script": "fetch_dbs_assembly.sh", "then": "unpack_dbs.sh", "n_files": 24,
                  "download_bytes": 90437315335, "disk_bytes": 170047067806,
                  "tools": ("bash", "curl", "xargs", "md5sum", "gunzip", "tar", "python3"),   # unpack_dbs.sh needs the last four
                  "what": "MGnify pipeline v5.0 reference databases (UniRef90 DIAMOND, eggNOG 2.0.0, KOfam, Pfam 32.0, "
                          "InterProScan 5.36-75.0, KEGG module graphs)",
                  "note": "downloaded once, resumable, 4 parallel streams; read QC against hg38 is off by default and its "
                          "index is not fetched"},
-    "read": {"script": "fetch_dbs_B.sh", "then": None, "n_files": 1,
+    "read": {"script": "fetch_dbs_read.sh", "then": None, "n_files": 1,
              "download_bytes": 384430080, "disk_bytes": 2936494131,
              "tools": ("bash", "curl", "bowtie2-build", "md5sum", "tar", "bunzip2"),   # bunzip2 is its own package on slim images
              "what": "MetaPhlAn 3 marker database mpa_v30_CHOCOPhlAn_201901 (the one curatedMetagenomicData 3 used)",
@@ -454,7 +455,7 @@ def _missing_tools(pipeline: str) -> list[str]:
 def _run_script(script: str, argv: list) -> tuple[int, list]:
     """Run a fetch script, echoing its output to stdout as it goes, and return (exit status, lines it marked failed).
 
-    The output is relayed rather than captured and printed at the end because these scripts run for hours. fetch_dbs.sh
+    The output is relayed rather than captured and printed at the end because these scripts run for hours. fetch_dbs_assembly.sh
     is not `set -e` by design (one failed URL must not abort the other 23, the run being resumable), so its exit status
     alone does not say whether everything arrived: the [FAIL] lines it prints do."""
     failed = []
@@ -470,8 +471,8 @@ def _run_script(script: str, argv: list) -> tuple[int, list]:
 def databases(pipeline, dest, dry_run=False) -> dict:
     """Fetch the reference databases a pipeline needs, by running the pinned scripts in container/.
 
-    The scripts are the authority on what a pipeline's measurement needs — fetch_dbs.sh then unpack_dbs.sh for the
-    assembly-based pipeline, fetch_dbs_B.sh (which also builds the Bowtie2 index) for the read-based one — and both are
+    The scripts are the authority on what a pipeline's measurement needs — fetch_dbs_assembly.sh then unpack_dbs.sh for the
+    assembly-based pipeline, fetch_dbs_read.sh (which also builds the Bowtie2 index) for the read-based one — and both are
     resumable, so this is re-run after an interruption. They are invoked through bash with `dest` as their argument, not
     executed directly, since not all of them carry the executable bit.
 
@@ -497,7 +498,7 @@ def databases(pipeline, dest, dry_run=False) -> dict:
         out["missing_tools"] = missing
         return out
     if missing:
-        where = ("container/checkgm_tierA.def" if p == "assembly" else "container/checkgm_pipelineB.def")
+        where = ("container/checkgm_assembly.def" if p == "assembly" else "container/checkgm_read.def")
         raise ValueError(f"the {p}-based database setup needs {', '.join(missing)} on PATH and {'it is' if len(missing) == 1 else 'they are'} "
                          f"not there; run it inside the pipeline image ({where}) or install {'it' if len(missing) == 1 else 'them'} first")
     if shutil.which("bash") is None:

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # checkgm assembly-based pipeline — fetch the pinned MGnify pipeline v5.0 reference databases and tool data. Run once; resumable; 4 parallel streams.
-# Usage: fetch_dbs.sh <dest_dir>
+# Usage: fetch_dbs_assembly.sh <dest_dir>
 set -uo pipefail
 DEST=${1:?dest dir}; mkdir -p "$DEST"; cd "$DEST"
 EBI=https://ftp.ebi.ac.uk/pub/databases/metagenomics/pipeline-5.0/ref-dbs

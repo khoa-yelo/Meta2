@@ -143,9 +143,9 @@ def test_setup_db_states_the_size_before_a_very_large_transfer(tmp_path):
     r = run(["setup", "db", "--pipeline", "assembly", "--dest", tmp_path / "dbs", "--dry-run"])
     assert r.returncode == 0, r.stderr
     assert "to download" in r.stdout and "on disk" in r.stdout
-    assert "would run:" in r.stdout and "fetch_dbs.sh" in r.stdout
+    assert "would run:" in r.stdout and "fetch_dbs_assembly.sh" in r.stdout
     r2 = run(["setup", "db", "--pipeline", "read", "--dest", tmp_path / "d2", "--dry-run"])
-    assert r2.returncode == 0 and "fetch_dbs_B.sh" in r2.stdout
+    assert r2.returncode == 0 and "fetch_dbs_read.sh" in r2.stdout
 
 
 def test_profile_refuses_in_one_line_without_an_image_or_databases(reads, tmp_path):

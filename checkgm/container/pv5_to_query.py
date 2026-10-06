@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Helpers for run_tierA.sh: contig filter, Prodigal+FragGeneScan merge (pipeline-v5 CGC semantics), DIAMOND taxonomy join,
+"""Helpers for run_assembly.sh: contig filter, Prodigal+FragGeneScan merge (pipeline-v5 CGC semantics), DIAMOND taxonomy join,
 KOfam best hits and per-contig KO union, and the final query-directory writer (checkgm/query_format.md)."""
 import argparse, gzip, os, re
 from collections import defaultdict
@@ -162,7 +162,7 @@ def build(a):
 
 
 def main():
-    """Command line: `pv5_to_query.py <subcommand> ...` with the subcommands used by run_tierA.sh (filter-contigs, rename-megahit, merge-cds, join-taxonomy, kofam-union, build)."""
+    """Command line: `pv5_to_query.py <subcommand> ...` with the subcommands used by run_assembly.sh (filter-contigs, rename-megahit, merge-cds, join-taxonomy, kofam-union, build)."""
     ap = argparse.ArgumentParser(); sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("filter-contigs"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True); p.add_argument("--min-length", type=int, default=500)
     p = sub.add_parser("rename-megahit"); p.add_argument("--in", dest="inp", required=True); p.add_argument("--out", required=True)

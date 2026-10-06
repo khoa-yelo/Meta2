@@ -77,7 +77,7 @@ them. One rename matters: `score` now means the health score, and what `score` u
 ## Get a reference bundle
 
 Bundles, the assembly-based pipeline image and the baseline pool accession lists are too large for GitHub and are
-distributed beside it; a Zenodo deposit covering them and the container image `checkgm_tierA.sif` is prepared, and its
+distributed beside it; a Zenodo deposit covering them and the container image `checkgm_assembly.sif` is prepared, and its
 DOI is reserved as `10.5281/zenodo.23181418` and will resolve once the record is public. **That deposit is not public yet**, so until it is, the archives have to be requested
 from the authors and given to `setup` directly:
 
@@ -96,7 +96,7 @@ table is also what a request to the authors should yield, so that whatever arriv
 | `gut-assembly-adult-global-v0.8-strict.tar.gz` (strict) | 54,318,945 | `ddffa36865e3c971b93a826bf47694f72809f935f637a20955bdb9bab363bd5c` |
 | `gut-reads-adult-global-v0.2-lenient.tar.gz` (standard read-based baseline) | 64,799,615 | `ab6b82bdc62b72dcfa860ea2dbf0e7d6e750c8058723721c3b2e7f25415b5c0e` |
 | `gut-reads-adult-global-v0.2-strict.tar.gz` (strict) | 64,771,253 | `4742e992125786a8286b030510dd6c45e727fd29620a7e6d4ae5588eaefb8734` |
-| `checkgm_tierA.sif` (the assembly-based pipeline image, Apptainer) | 783,478,784 | `e7b0de48eef988a8d9f420918a90da89e1315637850ada6fe93d037e890075a6` |
+| `checkgm_assembly.sif` (the assembly-based pipeline image, Apptainer) | 783,478,784 | `e7b0de48eef988a8d9f420918a90da89e1315637850ada6fe93d037e890075a6` |
 | `pool_gut-assembly-adult-global-v0.8-lenient.tsv` (1,941 public accessions: study, MGnify analysis and assembly, ENA runs, sample, BioSample, size class) | 169,843 | `a1b3ca2bfda3261b74c9c8fad05c1a0fa1c469866c31e956f2dec1c00aaa79b7` |
 | `pool_gut-assembly-adult-global-v0.8-strict.tsv` (1,588 accessions) | 136,627 | `75889428751fa5fdb623dc917572325639d00fb0c28ea1ff721bbc81d070a5fe` |
 | `heldout_healthy_gut-assembly-adult-global-v0.8.tsv` (233 accessions of the three healthy cohorts kept out for validation) | 29,678 | `45e26202d15b20ddca3c4aac2714ed205b15719bab74168190976df81d777de7` |
@@ -126,7 +126,7 @@ git clone -b checkgm https://github.com/khoa-yelo/Meta2.git && cd Meta2/checkgm
 
 `examples/synthetic_healthy_adult.txt` is a MetaPhlAn 3 profile in the exact output format, but of no real person: it
 was generated from the read-based bundle's own summary statistics (every basis species with prevalence at least 0.3,
-at its median abundance), so a healthy sample's profile can be shown without redistributing anyone's data.
+at its median abundance), so a reference-median profile can be shown without redistributing anyone's data.
 `examples/reads.tsv` gives its read count the way a merged table would need it (single-sample MetaPhlAn files carry the
 count in their header, as this one does, so the option is redundant here).
 
@@ -159,15 +159,16 @@ given to an assembly command or the other way round, a missing input file, or a 
 
 ## From raw reads
 
-- **Read-based pipeline:** `container/checkgm_pipelineB.def` builds an Apptainer image with MetaPhlAn 3.0.14, Bowtie2 and
-  checkGM (`cd container && apptainer build checkgm_pipelineB.sif checkgm_pipelineB.def`). `container/fetch_dbs_B.sh` fetches
+- **Read-based pipeline:** `container/checkgm_read.def` builds an Apptainer image with MetaPhlAn 3.0.14, Bowtie2 and
+  checkGM (`cd container && apptainer build checkgm_read.sif checkgm_read.def`). `container/fetch_dbs_read.sh` fetches
   the marker database (0.4 GB download, about 3 GB with the index; the archive's md5 is pinned in the script);
-  `container/run_pipelineB.sh` runs profile, normalize and score for one sample. Both mates are given to MetaPhlAn as
+  `container/run_read.sh` runs profile, normalize and score for one sample. Both mates are given to MetaPhlAn as
   unpaired reads and there is no read QC step, which is how the reference profiles were produced.
-- **Assembly-based pipeline:** `container/checkgm_tierA.def` (image `checkgm_tierA.sif`, see the table above; build with
-  `cd container && apptainer build checkgm_tierA.sif checkgm_tierA.def`) pins the MGnify v5 tool versions.
-  `container/fetch_dbs.sh` and `unpack_dbs.sh` fetch the reference databases (about 90 GB to download and 170 GB on disk once unpacked (`checkgm setup db --pipeline assembly --dry-run` prints the current figures);
-  downloaded once). `container/run_tierA.sh` goes from reads to a *query directory* (`docs/query_format.md`), which
+- **Assembly-based pipeline:** `container/checkgm_assembly.def` (image `checkgm_assembly.sif`, see the table above; build with
+  `cd container && apptainer build checkgm_assembly.sif checkgm_assembly.def`) pins the MGnify v5 tool versions.
+  `container/fetch_dbs_assembly.sh` and `unpack_dbs.sh` fetch the reference databases, downloaded once: about 90 GB over
+  the wire and 170 GB on disk, which `checkgm setup db --pipeline assembly --dry-run` prints before transferring
+  anything. `container/run_assembly.sh` goes from reads to a *query directory* (`docs/query_format.md`), which
   `checkgm assess --input` turns into a report. `checkgm profile --pipeline assembly` runs this for you and checks the
   image and databases are present first; `checkgm end-to-end` continues straight into the assessment and the score.
   Assembly needs roughly 16 CPUs and 128 GB of memory per sample.

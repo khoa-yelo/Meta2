@@ -1,7 +1,7 @@
 """checkgm.profile_run — run a measurement pipeline on raw reads (`checkgm profile`).
 
 The measurement itself lives in the container scripts, which pin every tool version the reference was measured with
-(`container/run_tierA.sh` for the assembly-based pipeline, `container/run_pipelineB.sh` for the read-based one). Nothing
+(`container/run_assembly.sh` for the assembly-based pipeline, `container/run_read.sh` for the read-based one). Nothing
 here reimplements a step: this module decides whether the run can happen at all, rewrites host paths into the bind mounts
 the image sees, builds one `apptainer run` invocation, and reports where the output `checkgm assess` consumes ended up.
 
@@ -9,9 +9,9 @@ Two shapes of output, one per pipeline, because the two baselines are measured d
   assembly  OUT/query/                     a query directory (docs/query_format.md) -> `checkgm assess` against gut-assembly-*
   read      OUT/<sample>.txt + .reads.tsv  a MetaPhlAn 3 profile and its read count -> `checkgm assess` against gut-reads-*
 HUMAnN 3 tables are an input to assess rather than a product of either pipeline (neither run script calls HUMAnN;
-run_pipelineB.sh only forwards tables it is handed), so this module never claims to have made them.
+run_read.sh only forwards tables it is handed), so this module never claims to have made them.
 
-Both scripts are resumable in place (tierA stamps `.done_<step>`, pipelineB skips MetaPhlAn when the profile and read
+Both scripts are resumable in place (the assembly script stamps `.done_<step>`, the read script skips MetaPhlAn when the profile and read
 count are already there), so re-running `run()` on the same --out continues rather than starts over.
 
 Three environment variables name what a pip install cannot provide: $CHECKGM_IMAGES (colon-separated directories holding
@@ -40,8 +40,8 @@ RUNTIME_ENV_VAR = "CHECKGM_APPTAINER"
 RUNTIMES = ("apptainer", "singularity")   # singularity is the pre-rename name of the same runtime and takes the same options
 
 # image and recipe names as container/*.def and the README's distribution table spell them
-IMAGE_NAME = {"assembly": "checkgm_tierA.sif", "read": "checkgm_pipelineB.sif"}
-DEF_NAME = {"assembly": "checkgm_tierA.def", "read": "checkgm_pipelineB.def"}
+IMAGE_NAME = {"assembly": "checkgm_assembly.sif", "read": "checkgm_read.sif"}
+DEF_NAME = {"assembly": "checkgm_assembly.def", "read": "checkgm_read.def"}
 # a database directory may hold both pipelines' data side by side, so each kind also gets a conventional subdirectory
 DBS_SUBDIR = {"assembly": "assembly", "read": "read"}
 
@@ -55,16 +55,16 @@ REQUIRED_DBS = {
 }
 # The scripts behind 'checkgm setup db', named for anyone without the new command; their sizes are not repeated here
 # because checkgm.setup_data records the measured ones and says the README's round figures are too small.
-FETCH_SCRIPT = {"assembly": "container/fetch_dbs.sh then container/unpack_dbs.sh", "read": "container/fetch_dbs_B.sh"}
+FETCH_SCRIPT = {"assembly": "container/fetch_dbs_assembly.sh then container/unpack_dbs.sh", "read": "container/fetch_dbs_read.sh"}
 ASSEMBLY_CPUS, ASSEMBLY_MEM_GB = 16, 128   # README, "From raw reads": roughly this much per sample
-TIERA_DEFAULT_MEM_GB = 120                 # run_tierA.sh MEMGB default, i.e. what the validated runs used
+ASSEMBLY_DEFAULT_MEM_GB = 120                 # run_assembly.sh MEMGB default, i.e. what the validated runs used
 
-# $SAMPLE becomes a file name (run_pipelineB.sh writes $OUT/$SAMPLE.txt) and an unquoted word in places inside the
+# $SAMPLE becomes a file name (run_read.sh writes $OUT/$SAMPLE.txt) and an unquoted word in places inside the
 # scripts, so the ids that cannot survive the trip are refused here rather than producing a file nobody can find.
 SAMPLE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 READS_PROCESSED_RE = re.compile(r"#\s*([\d,]+)\s+reads processed")   # same header line normalize_reads.py reads
 STDERR_LOG = "profile.stderr.log"
-PIPELINE_LOG = {"assembly": "tierA.log", "read": "pipelineB.log"}
+PIPELINE_LOG = {"assembly": "assembly.log", "read": "read.log"}
 
 
 def _warn(msg: str):
@@ -309,8 +309,8 @@ def _resource_notes(pipeline: str, threads: int, mem_gb: int | None) -> list:
         if threads < ASSEMBLY_CPUS:
             notes.append(f"assembly needs roughly {ASSEMBLY_CPUS} CPUs and {ASSEMBLY_MEM_GB} GB of memory per sample; this run "
                          f"asks for {threads}")
-        if mem_gb is not None and mem_gb < TIERA_DEFAULT_MEM_GB:
-            notes.append(f"--mem-gb {mem_gb} is below the {TIERA_DEFAULT_MEM_GB} GB the validated assembly runs used; metaSPAdes "
+        if mem_gb is not None and mem_gb < ASSEMBLY_DEFAULT_MEM_GB:
+            notes.append(f"--mem-gb {mem_gb} is below the {ASSEMBLY_DEFAULT_MEM_GB} GB the validated assembly runs used; metaSPAdes "
                          f"may run out of memory on a deep library")
     elif mem_gb is not None:
         notes.append("--mem-gb is ignored by the read-based pipeline, whose run script takes no memory argument")
@@ -328,8 +328,8 @@ def run(pipeline, sample, out, r1=None, r2=None, contigs=None, profile_in=None, 
         threads=8, mem_gb=None, image=None, dry_run=False) -> dict:
     """Run one sample through a measurement pipeline and return what it produced.
 
-    pipeline is "assembly" (container/run_tierA.sh: assembly + MGnify v5-equivalent annotation -> OUT/query) or "read"
-    (container/run_pipelineB.sh: MetaPhlAn 3 -> OUT/<sample>.txt and OUT/<sample>.reads.tsv). --contigs starts the
+    pipeline is "assembly" (container/run_assembly.sh: assembly + MGnify v5-equivalent annotation -> OUT/query) or "read"
+    (container/run_read.sh: MetaPhlAn 3 -> OUT/<sample>.txt and OUT/<sample>.reads.tsv). --contigs starts the
     assembly pipeline from an assembly; --profile-in skips the read pipeline altogether and only places the profile.
 
     Anything the user can correct raises ValueError or FileNotFoundError with a one-line message, which is the form the

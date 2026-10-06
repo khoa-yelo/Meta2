@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- 2026-10-06, **the two pipelines are named after what they do, not by codename.** `tierA` becomes `assembly` and
+  `pipelineB` becomes `read`, matching the words the CLI already used in `--pipeline assembly|read`. The word "tier"
+  was carrying two unrelated meanings — the pipeline (tier A / tier B) and the baseline's inclusion rule (lenient /
+  strict, which is what the paper calls an inclusion tier) — and the two axes are independent: all four combinations of
+  pipeline and inclusion tier exist as bundles. "Tier" now means only inclusion strictness.
+
+  | before | after |
+  |---|---|
+  | `container/checkgm_tierA.def`, `.sif` | `container/checkgm_assembly.def`, `.sif` |
+  | `container/run_tierA.sh` | `container/run_assembly.sh` |
+  | `container/fetch_dbs.sh` | `container/fetch_dbs_assembly.sh` |
+  | `container/checkgm_pipelineB.def`, `.sif` | `container/checkgm_read.def`, `.sif` |
+  | `container/run_pipelineB.sh` | `container/run_read.sh` |
+  | `container/fetch_dbs_B.sh` | `container/fetch_dbs_read.sh` |
+  | pipeline logs `tierA.log`, `pipelineB.log` | `assembly.log`, `read.log` |
+
+  The deposited image is renamed with it. That was possible only because the Zenodo record is still a private draft:
+  the new name was uploaded, the old file removed, and the image's sha256 is unchanged
+  (`e7b0de48eef988a8d9f420918a90da89e1315637850ada6fe93d037e890075a6`) since only the file name differs. An earlier
+  entry below says the `tierA` file name was kept so the released checksum would stay valid; that no longer applies.
+
+  Two things were deliberately left alone. The research workspace (`project/scripts`, `project/work`,
+  `project/configs/decisions.yaml`) keeps the old names, because those are the provenance record of how the baselines
+  were actually built and the validation reports cite them by name; `docs/validation.md` and `docs/configs/README.md`
+  now say so. And the entries below this one are not rewritten, since a changelog records what was true when written.
+
+  Corrected while passing through: `container/checkgm_assembly.def` still advertised the databases as ~70 GB, the
+  figure the README carried before it was measured at about 90 GB to download and 170 GB on disk.
+
 - 2026-10-06, **the command-line interface is now five commands**: `setup`, `profile`, `assess`, `score` and
   `end-to-end`. `assess` determines the kind of input from what the path holds (an assembly query directory, an MGnify
   v5 analysis, a MetaPhlAn profile, or a directory `assess` itself wrote), so one command serves every entry point, and

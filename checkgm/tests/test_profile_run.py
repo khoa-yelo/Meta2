@@ -223,7 +223,7 @@ def test_read_command_disables_the_scoring_step_of_the_run_script(tmp_path):
     r1, = reads(tmp_path, "lib/S_1.fq.gz")
     argv = P.build_command("read", "S1", str(tmp_path / "out"), fake_dbs(tmp_path, "read"),
                            fake_image(tmp_path, "read"), {"r1": r1}, 8, None)
-    # run_pipelineB.sh insists on a bundle and then scores; placement is `checkgm assess`'s job, so its checkgm step is
+    # run_read.sh insists on a bundle and then scores; placement is `checkgm assess`'s job, so its checkgm step is
     # turned into a no-op through the script's own CHECKGM_BIN hook and the bundle argument is a visible placeholder.
     assert argv[argv.index("--env") + 1] == "CHECKGM_BIN=/bin/true"
     assert argv[argv.index("--bundle") + 1] == "not-used-by-checkgm-profile"
@@ -265,13 +265,13 @@ def test_thin_assembly_request_is_a_note_not_a_refusal(tmp_path, capsys, monkeyp
 def test_read_pipeline_run_reports_what_the_script_wrote(tmp_path, monkeypatch):
     out = str(tmp_path / "out")
     body = f"mkdir -p {out!r}\nprintf '%s' {PROFILE_HEAD!r} > {out!r}/S1.txt\nprintf 'S1\\t100\\n' > {out!r}/S1.reads.tsv\n" \
-           f"echo step > {out!r}/pipelineB.log\n"
+           f"echo step > {out!r}/read.log\n"
     monkeypatch.setenv(P.RUNTIME_ENV_VAR, fake_runtime(tmp_path, body=body))
     r1, = reads(tmp_path, "lib/S_1.fq.gz")
     r = P.run("read", "S1", out, r1=r1, dbs=fake_dbs(tmp_path, "read"), image=fake_image(tmp_path, "read"), threads=4)
     assert r["status"] == "ok" and r["assess_input"] == os.path.join(out, "S1.txt")
     assert r["outputs"]["reads_tsv"].endswith("S1.reads.tsv") and os.path.isfile(r["outputs"]["reads_tsv"])
-    assert r["log"].endswith("pipelineB.log") and r["elapsed_s"] >= 0 and r["notes"] == []
+    assert r["log"].endswith("read.log") and r["elapsed_s"] >= 0 and r["notes"] == []
     assert argv_of(tmp_path)[:3] == ["run", "--cleanenv", "--bind"]
 
 
