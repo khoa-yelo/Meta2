@@ -24,7 +24,7 @@ outside the central 95 % band exceeds the 5 % a healthy sample is expected to sh
 ## Install
 
 ```bash
-pip install git+https://github.com/khoa-yelo/Meta2.git@refmb#subdirectory=checkgm
+pip install git+https://github.com/khoa-yelo/Meta2.git@checkgm#subdirectory=checkgm
 checkgm --version          # checkGM 0.8.2
 ```
 
@@ -68,7 +68,7 @@ hold public identifiers only (no measurements); `docs/bundle_format.md` describe
 The example files live in the repository, so clone it first (the `pip install` above does not copy them):
 
 ```bash
-git clone -b refmb https://github.com/khoa-yelo/Meta2.git && cd Meta2/checkgm
+git clone -b checkgm https://github.com/khoa-yelo/Meta2.git && cd Meta2/checkgm
 ```
 
 `examples/synthetic_healthy_adult.txt` is a MetaPhlAn 3 profile in the exact output format, but of no real person: it
