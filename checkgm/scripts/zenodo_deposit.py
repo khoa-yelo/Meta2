@@ -14,7 +14,7 @@ Metadata comes from release/zenodo.json; the run aborts while any creator name i
 created with placeholder authorship. Files are uploaded through the bucket API, which streams and so handles the
 783 MB container without loading it into memory. An upload that is interrupted can be re-run: files already present
 with the right size are skipped."""
-import argparse, hashlib, json, os, sys, urllib.error, urllib.request
+import argparse, json, os, subprocess, sys, urllib.error, urllib.request
 
 P = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REL = os.path.join(P, "release")
@@ -33,17 +33,15 @@ def api(url, token, method="GET", payload=None, timeout=120):
 
 
 def put_file(bucket, name, path, token):
-    size = os.path.getsize(path)
-    req = urllib.request.Request(f"{bucket}/{name}", method="PUT",
-                                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream",
-                                          "Content-Length": str(size)})
-    with open(path, "rb") as fh:
-        req.data = fh                      # urllib streams a file object, so the image is not read into memory
-        try:
-            with urllib.request.urlopen(req, timeout=7200) as r:
-                return json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            sys.exit(f"upload {name} -> {e.code}\n{e.read().decode()[:800]}")
+    """Upload through curl. Handing urllib an open file stalled on the bucket endpoint without transferring, and curl
+    also gives retries and resumable behaviour that matter for the ~800 MB container image."""
+    code = subprocess.run(["curl", "-s", "--retry", "3", "--retry-delay", "5", "--max-time", "7200",
+                           "-w", "%{http_code}", "-X", "PUT", "-H", f"Authorization: Bearer {token}",
+                           "--upload-file", path, f"{bucket}/{name}", "-o", os.devnull],
+                          capture_output=True, text=True).stdout.strip()
+    if code not in ("200", "201"):
+        sys.exit(f"upload {name} -> HTTP {code}")
+    return {"key": name}
 
 
 def main():
