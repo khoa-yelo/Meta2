@@ -216,3 +216,112 @@ hk = aggk[aggk.group == "Hadza (Tanzania)"].assign(score=lambda d: d.high - d.lo
 topk = list(hk.sort_values("score").tail(4).index) + list(hk.sort_values("score").head(3).index)
 aggk[aggk.feature_id.isin(topk)].assign(direction=lambda d: np.where(d.feature_id.isin(hk.sort_values("score").tail(4).index), "above", "below")).to_csv(f"{OUT}/f5_ko.csv", index=False)
 print("function panels written")
+
+# ---- Figs 3 and 4 as report views: the same geometry as Fig. 1c, carried into the two case studies.
+# In percentile space the reference range is 2.5--97.5 for every feature, so one shaded band serves every row and a
+# point outside it is outside the reference range by construction. That is what these two files are for: a percentile
+# and a call per sample per feature, taxa and function together, rather than the shares and shifts the panels used
+# before, which showed the deviation without ever showing the range it was a deviation from.
+
+# read the cohort's scores again rather than reuse `sc`, which is rebound further up to a reduced frame carrying
+# neither percentiles nor groups; a panel that silently depends on a name defined 100 lines away is how this broke once
+_cdi = pd.read_parquet(f"{P}/work/s8/scores/{EC.STUDY}.parquet",
+                       columns=["analysis_id", "layer", "feature_id", "percentile", "call"])
+_cdi = _cdi[_cdi.analysis_id.map(inv2.is_primary_analysis).astype(bool)].copy()
+_cdi["group"] = _cdi.analysis_id.map(inv2.cur_Health_status_group).map(
+    {"Diseased": "C. difficile cases", "Healthy": "controls", "Control": "controls"})
+_cdi = _cdi[_cdi.group.notna()]
+assert {"percentile", "call", "group"} <= set(_cdi.columns) and len(_cdi), "C. difficile scores did not load"
+# Restricted to features the reference population actually carries, as everything else in the paper is. Without it the
+# ranking is won by artifacts: a rare environmental family, a bacteriophage (Herelleviridae) and a whipworm
+# (Trichuridae) all separate cases from controls perfectly, as do single-hit effector genes at thin coverage, because a
+# feature almost nobody carries is "outside the range" for almost everybody. The thresholds are the ones the Hadza
+# panels use: half the reference adults in some size class for taxa, nine tenths for gene families.
+# Two restrictions, each for a reason the data forced. Bacteria only (domain_taxid 2), because the contig-level
+# assignments include a bacteriophage family and Trichuridae, the whipworms, which a panel headed "bacterial families"
+# must not contain --- Trichuridae is not even rare, carried by 1,829 of the 1,941 reference adults, which is homology
+# at the contig level rather than helminth DNA. And study-weighted prevalence rather than the most permissive size
+# band, since taking the maximum over bands admitted Herelleviridae at 0.34 weighted on the strength of 0.51 in one
+# band alone.
+_dom = pd.read_parquet(f"{P}/resources/backbone/ncbi_taxonomy.parquet", columns=["taxid", "domain_taxid"])
+_bact = set(_dom.query("domain_taxid == 2").taxid.astype(str))
+_rf = pd.read_parquet(f"{B}/features/taxonomy_family.parquet").set_index("feature_id")
+_commonf = set(_rf.index[_rf.prevalence_weighted >= 0.5].astype(str)) & _bact
+_cdi = _cdi[((_cdi.layer == "taxonomy_family") & _cdi.feature_id.astype(str).isin(_commonf))
+            | ((_cdi.layer == "ko_eggnog") & _cdi.feature_id.astype(str).isin(commonk))]
+# Features are chosen by the rule the share panel already used and the text already describes: the eight whose loss
+# (below the range or absent) most separates patients from controls, and the four most gained. Re-deriving a selection
+# instead produced a different, unnamed set each time the rule was tweaked, and the prose would then have described a
+# panel that was not there.
+# Gene families have no published list, so they are ranked the way the families were: most lost, then most gained.
+_k = _cdi[(_cdi.layer == "ko_eggnog") & _cdi.feature_id.astype(str).isin(commonk)]
+_ng = _k.drop_duplicates("analysis_id").groupby("group").size()
+_c = _k.groupby(["feature_id", "group"]).call.value_counts().unstack(fill_value=0) \
+       .reindex(columns=["low", "expected_but_missing", "high"], fill_value=0)
+_c = _c.div(_c.index.get_level_values("group").map(_ng), axis=0).reset_index()
+_w = _c.pivot(index="feature_id", columns="group", values=["low", "expected_but_missing", "high"]).fillna(0)
+_named = [f for f in _w.index if KNAME.get(str(f)) and "uncharacterized" not in KNAME[str(f)].lower()]
+_w = _w.loc[_named]
+_lost = ((_w["low"]["C. difficile cases"] + _w["expected_but_missing"]["C. difficile cases"])
+         - (_w["low"]["controls"] + _w["expected_but_missing"]["controls"])).sort_values()
+_gain = (_w["high"]["C. difficile cases"] - _w["high"]["controls"]).sort_values()
+_pick_ko = list(_lost.tail(3).index) + list(_gain.tail(2).index)
+
+_picked = pd.read_csv(f"{OUT}/f4_cdi_calls.csv")["name"].drop_duplicates().tolist()
+_byname = {v: k for k, v in NAME.items()}
+_rows = []
+for layer, fids, blk in (("taxonomy_family", [_byname[n] for n in _picked if n in _byname], "Bacterial families"),
+                         ("ko_eggnog", [str(x) for x in _pick_ko], "Gene families")):
+    for fid in dict.fromkeys(str(x) for x in fids):
+        g = _cdi[(_cdi.layer == layer) & (_cdi.feature_id.astype(str) == fid)]
+        nm = NAME.get(fid) or KNAME.get(fid, fid)
+        for r in g.itertuples():
+            _rows.append({"block": blk, "name": nm, "sample": r.analysis_id, "group": r.group,
+                          "pct": r.percentile, "call": r.call})
+f3r = pd.DataFrame(_rows)
+f3r.to_csv(f"{OUT}/f3_range_cdi.csv", index=False)
+print(f"f3 report view: {f3r['name'].nunique()} features, {f3r['sample'].nunique()} samples, "
+      f"{f3r.groupby('block')['name'].nunique().to_dict()}")
+
+_sg = SA.drop_duplicates("sample").set_index("sample").group
+# The features are the ones the share panels and the paper's text already name, ranked by net directional deviation
+# (high - low - missing) rather than by total outside-ness: ranking by the total picks a different, unnamed set and the
+# figure would then contradict the sentence describing it.
+_pick = {"taxonomy_genus": (list(hz.sort_values("score").tail(4).index) + list(hz.sort_values("score").head(3).index),
+                            "Common gut genera"),
+         "ko_eggnog": (list(hk.sort_values("score").tail(3).index) + list(hk.sort_values("score").head(2).index),
+                       "Gene families")}
+_hz = []
+for layer, (_ids, blk) in _pick.items():
+    _ids = [str(x) for x in _ids]
+    Z = pd.read_parquet(f"{P}/work/s12/A/oos_scores.parquet", columns=["sample", "feature_id", "percentile", "call"],
+                        filters=[("layer", "==", layer)])
+    Z = Z[Z["sample"].isin(set(SA["sample"])) & Z.feature_id.astype(str).isin(set(_ids))].copy()
+    Z["group"] = Z["sample"].map(_sg)
+    Z["name"] = Z.feature_id.astype(str).map(lambda f_: NAME.get(f_) or KNAME.get(f_, f_))
+    Z["block"] = blk
+    _hz.append(Z[Z.group.notna()][["block", "name", "sample", "group", "pct" if "pct" in Z else "percentile", "call"]]
+               .rename(columns={"percentile": "pct"}))
+f4r = pd.concat(_hz, ignore_index=True)
+f4r.to_csv(f"{OUT}/f4_range_hadza.csv", index=False)
+print(f"f4 report view: {f4r.groupby('block')['name'].nunique().to_dict()}, {f4r['sample'].nunique()} samples")
+
+# The colorectal panel on the same axis as the rest: a cohort's case median and control median are both percentiles of
+# one baseline, so they can be drawn against the same reference band instead of being reduced to the difference between
+# them. Taxa and function together, restricted as before to features the reference population carries.
+_A = pd.read_csv(f"{P}/results/s12/disease_atlas_B_features.tsv", sep="\t", dtype={"feature_id": str})
+_A = _A[_A.condition == "CRC"]
+_Ac = pd.read_csv(f"{P}/results/s12/disease_atlas_B_consistent.tsv", sep="\t", dtype={"feature_id": str})
+_Ac = _Ac[(_Ac.condition == "CRC") & (_Ac.n_studies >= 3)]
+_A = _A.merge(_Ac[["layer", "feature_id", "n_studies", "median_shift"]], on=["layer", "feature_id"])
+_A["block"] = np.where(_A.layer.str.startswith("taxonomy"), "Taxa", "Function")
+_A["name"] = np.where(_A.layer.str.startswith("taxonomy"), _A.feature_id.map(NAME),
+                      _A.feature_id.map(lambda k_: PNAME.get(k_) or KNAME.get(k_) or k_))
+_A = _A[_A["name"].notna()]
+_keep = (_A.groupby(["block", "name"]).median_shift.first().abs().sort_values(ascending=False)
+           .groupby(level=0).head(6).index)
+_A = _A.set_index(["block", "name"]).loc[_keep.unique()].reset_index()
+_A["sig"] = (_A.q <= 0.05) & (_A["shift"].abs() >= 10)
+_A[["block", "name", "study", "median_pct_case", "median_pct_control", "shift", "sig", "n_studies"]] \
+  .to_csv(f"{OUT}/f3_range_crc.csv", index=False)
+print(f"f3 crc view: {_A.groupby('block')['name'].nunique().to_dict()}, {_A.study.nunique()} cohorts")

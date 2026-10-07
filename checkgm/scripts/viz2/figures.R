@@ -356,90 +356,82 @@ call_bars <- function(d) bind_rows(d %>% transmute(name, side, dir, v = low, wha
 
 # ======================================================================================== Figure 4: known disease associations
 cohort_lab <- function(s) sub("^([A-Z][a-z]+)[A-Z]+_([0-9]{4})_?([ab]?)$", "\\1 \\2\\3", s)
-fig4 <- function() {
-  cd <- read_csv(file.path(D, "f4_cdi_calls.csv")) %>% rename(missing = expected_but_missing) %>%
-    mutate(side = factor(ifelse(side == "lost", "lost", "gained"), c("lost", "gained")), dir = ifelse(side == "gained", "above", "below"))
-  cs <- filter(cd, group == "cases"); ct <- filter(cd, group == "controls")
-  ordr <- c(cs %>% filter(side == "lost") %>% arrange(low + missing) %>% pull(name), cs %>% filter(side == "gained") %>% arrange(high) %>% pull(name))
-  bars <- call_bars(cs) %>% mutate(name = factor(name, ordr))
-  mk <- ct %>% transmute(name = factor(name, ordr), side, x = ifelse(side == "gained", high, low + missing))
-  a <- ggplot(bars, aes(y = name)) +
-    geom_tile(aes(x = x, width = w, fill = what), height = 0.68) +
-    geom_point(data = mk, aes(x = 100 * x, shape = "controls (n = 14)"), size = 1.5, colour = INK, fill = "white", stroke = 0.45) +
-    facet_grid(side ~ ., scales = "free_y", space = "free_y") +
-    scale_fill_manual(values = CALLS, name = NULL) + scale_shape_manual(values = c("controls (n = 14)" = 23), name = NULL) +
-    scale_y_discrete(labels = ital_lab(ordr)) +
-    # a hair of left pad, so that the six control markers that sit at exactly 0 % are drawn whole rather than bisected by
-    # the panel border; those markers carry the claim that three families rise in no control at all
-    scale_x_continuous(limits = c(0, 68), breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0.018, 0))) +
-    labs(x = "patients outside the reference range (cases, n = 56)", y = NULL,
-         title = expression(bolditalic("C. difficile") * bold(" infection, one cohort (assembly pipeline)"))) +
-    guides(fill = guide_legend(order = 1, nrow = 1, keywidth = unit(6, "pt"), keyheight = unit(6, "pt")), shape = guide_legend(order = 2)) +
-    theme(legend.position = "bottom", legend.box = "horizontal", legend.box.just = "top", legend.spacing.x = unit(5, "pt"),
-          legend.justification = "center", strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5),
-          panel.spacing.y = unit(5, "pt"), axis.text.y = element_text(colour = INK, size = 6.5), panel.grid.major.y = element_blank())
+# ============================================= Figure 3: the report view carried into a cohort and across nine cohorts
+# Both panels are Fig. 1c's geometry on a percentile axis. In percentile space the reference range is 2.5--97.5 for
+# every feature, so one band serves every row and a point beyond it is outside the range by construction: the thing the
+# earlier version of this figure asserted with shares and shifts without ever drawing the range they departed from.
+ref_band <- function(ymax, label = TRUE) {
+  list(annotate("rect", xmin = 2.5, xmax = 97.5, ymin = -Inf, ymax = Inf, fill = BAND, colour = NA),
+       annotate("rect", xmin = 25, xmax = 75, ymin = -Inf, ymax = Inf, fill = IQR, colour = NA),
+       annotate("segment", x = 50, xend = 50, y = -Inf, yend = Inf, colour = MED, linewidth = 0.3))
+}
+CALL_F <- c(low = LOW, high = HIGH, within = WITHIN, expected_but_missing = LOW_L)
+CALL_L <- c(low = "below the range", high = "above the range", within = "within",
+            expected_but_missing = "expected but absent")
 
-  short <- function(x) {                                    # keep the long MetaCyc and KO names readable at 6 pt
-    x <- sub(" \\[EC:[^]]*\\]$", "", x)
-    x <- sub("^two-component system, chemotaxis family, protein-glutamate.*", "chemotaxis methylesterase (CheB)", x)
-    x <- sub("^energy-coupling factor transport system.*", "energy-coupling factor transporter", x)
-    x <- sub("^ATP phosphoribosyltransferase regulatory subunit$", "ATP phosphoribosyltransferase (reg.)", x)
-    x <- sub("^thiamin formation from pyrithiamine and oxythiamine \\(yeast\\)$", "thiamin formation", x)
-    x <- sub("^myo-, chiro- and scillo-inositol degradation$", "inositol degradation", x)
-    x <- sub("^pyruvate fermentation to acetate and lactate II$", "pyruvate fermentation to acetate", x)
-    x <- sub("^pentose phosphate pathway \\(non-oxidative branch\\)$", "pentose phosphate (non-oxidative)", x)
-    x <- sub("^methylerythritol phosphate pathway II$", "methylerythritol phosphate pathway", x)
-    x
-  }
-  # room for the function rows; the full lists are in the atlas tables. Seven genera rather than six, because Lachnospira
-  # (-24.76) and Fusicatenibacter (-24.57) are quoted together in the text and are 0.19 points apart in the ranking.
-  keep_n <- c(Family = 5, Genus = 7)
-  cr <- read_csv(file.path(D, "f4_crc.csv")) %>% filter(rank != "Species")
-  topt <- cr %>% distinct(rank, name, median_shift) %>% group_by(rank) %>% slice_min(median_shift, n = keep_n[["Genus"]]) %>% ungroup() %>%
-    filter(rank != "Family" | name %in% (cr %>% distinct(rank, name, median_shift) %>% filter(rank == "Family") %>%
-                                           slice_min(median_shift, n = keep_n[["Family"]]) %>% pull(name)))
-  cr <- filter(cr, name %in% topt$name)
-  fn <- read_csv(file.path(D, "f4_crc_function.csv")) %>% mutate(name = short(name)) %>%
-    group_by(rank) %>% filter(name %in% (distinct(., name, median_shift) %>% slice_min(median_shift, n = 5) %>% pull(name))) %>% ungroup()
-  cr <- bind_rows(cr %>% mutate(rank = ifelse(rank == "Family", "families", "genera")),
-                  fn %>% mutate(rank = ifelse(rank == "gene families", "genes", rank))) %>% mutate(cohort = cohort_lab(study))
-  ital <- cr$name[cr$rank %in% c("families", "genera")]
-  ordt <- cr %>% distinct(rank, name, median_shift) %>% mutate(rank = factor(rank, c("families", "genera", "pathways", "genes"))) %>% arrange(rank, desc(median_shift))
-  cr$name <- factor(cr$name, ordt$name); cr$rank <- factor(cr$rank, c("families", "genera", "pathways", "genes"))
-  cr$cohort <- factor(cr$cohort, sort(unique(cr$cohort)))
-  sg <- filter(cr, sig)
-  # the grid is not complete: a feature consistent across cohorts was not necessarily scored in every one of them. Those
-  # cells are drawn as empty dashed outlines, so that "not scored here" cannot be mistaken for the near-white of no shift.
-  gaps <- cr %>% distinct(rank, name) %>% crossing(cohort = levels(cr$cohort)) %>%
-    anti_join(cr %>% select(rank, name, cohort), by = c("rank", "name", "cohort")) %>%
-    mutate(rank = factor(rank, levels(cr$rank)), name = factor(name, levels(cr$name)), cohort = factor(cohort, levels(cr$cohort)))
-  b <- ggplot(cr, aes(x = cohort, y = name, fill = shift)) + geom_tile(colour = "white", linewidth = 0.5) +
-    geom_tile(data = gaps, aes(x = cohort, y = name, colour = "not scored"), inherit.aes = FALSE, fill = "white", linewidth = 0.25, linetype = "22") +
-    # one colour for every dot. On this ramp a black dot is the more legible of the two on all but the darkest cell the
-    # table produces: the contrast against black runs from 18.8:1 at no shift to 5.0:1 at 60 points and 4.1:1 at the
-    # single 69.2-point cell, where white reaches 5.2:1. A threshold anywhere inside that range buys a tenth of a stop of
-    # contrast on a handful of cells and pays for it by putting a white dot and a black dot on two cells of the same
-    # shade in the same column, which reads as though the colour of the dot encoded something.
-    geom_point(data = sg, size = 0.75, colour = INK) +
-    facet_grid(rank ~ ., scales = "free_y", space = "free_y") +
-    # the limits reach the largest shift in the table (69.2 points), so nothing is quietly flattened against the end of the
-    # ramp and a given number of percentile points means the same colour in every column and on every layer
-    scale_fill_gradient2(low = LOW, mid = "#F2F2F2", high = HIGH, midpoint = 0, limits = c(-70, 70), oob = squish, breaks = c(-60, -30, 0, 30, 60),
-                         labels = c(paste0(MINUS, "60"), paste0(MINUS, "30"), "0", "30", "60"), name = "cases − controls\n(percentile points)") +
-    scale_colour_manual(values = c("not scored" = AXIS), name = NULL) +
-    scale_x_discrete(expand = c(0, 0)) + scale_y_discrete(expand = c(0, 0), labels = ital_lab(ital)) +
-    labs(x = NULL, y = NULL, title = "colorectal cancer, nine cohorts (read pipeline)") +
-    # the dashed cells earn a key of their own: nothing else in the figure or its caption would tell a reader that a
-    # dashed outline is a cohort in which the feature was not scored rather than one in which it did not shift
-    guides(fill = guide_colourbar(order = 1, barwidth = unit(4.5, "pt"), barheight = unit(60, "pt"), ticks.colour = "white"),
-           colour = guide_legend(order = 2, keywidth = unit(6, "pt"), keyheight = unit(6, "pt"),
-                                 override.aes = list(fill = "white", linetype = "22", linewidth = 0.25))) +
-    theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1, size = 6.2, colour = INK), panel.grid.major = element_blank(), axis.line = element_blank(),
-          axis.ticks = element_blank(), strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5),
-          axis.text.y = element_text(colour = INK, size = 6.2), legend.title = element_text(size = 6, colour = INK2), legend.position = "right",
-          legend.text = element_text(size = 6), legend.spacing.y = unit(4, "pt"), panel.spacing.y = unit(2.5, "pt"))
-  p <- (a | b) + plot_layout(widths = c(0.86, 1.0)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig4", DOUBLE, 2.95)
+fig4 <- function() {
+  # (a) one cohort, one dot per patient per feature
+  cd <- read_csv(file.path(D, "f3_range_cdi.csv"), show_col_types = FALSE) %>%
+    mutate(block = factor(block, c("Bacterial families", "Gene families")))
+  # not_assessable is a feature whose coverage is too thin to place at all, which the method leaves unassessed rather
+  # than calling; it is neither a finding nor an absence, so it is dropped rather than drawn as either
+  n_na <- sum(cd$call == "not_assessable")
+  cd <- filter(cd, call != "not_assessable") %>% mutate(call = factor(call, names(CALL_F)))
+  stopifnot(!any(is.na(cd$call)))
+  if (n_na > 0) message("  fig4a: ", n_na, " not-assessable cells dropped (too thin to place)")
+  ordr <- cd %>% filter(group == "C. difficile cases") %>% group_by(block, name) %>%
+    summarise(m = median(pct, na.rm = TRUE), .groups = "drop") %>% arrange(block, m) %>% pull(name)
+  cases <- cd %>% filter(group == "C. difficile cases") %>% mutate(name = factor(name, unique(ordr)))
+  # an absent feature has no percentile; it is drawn as an open ring at the floor so that shape, not colour alone,
+  # carries the distinction, and so that the row's absences are visible rather than silently dropped
+  miss <- cases %>% filter(is.na(pct)) %>% count(block, name, name = "k")
+  ctrl <- cd %>% filter(group == "controls") %>% group_by(block, name) %>%
+    summarise(m = median(pct, na.rm = TRUE), .groups = "drop") %>% mutate(name = factor(name, unique(ordr)))
+  a <- ggplot(cases, aes(y = name)) + ref_band() +
+    geom_point(data = filter(cases, !is.na(pct)), aes(x = pct, fill = call), shape = 21, size = 1.15,
+               stroke = 0.12, colour = "white",
+               position = position_jitter(height = 0.2, width = 0, seed = 4)) +
+    geom_point(data = miss, aes(x = 1.2, y = name), shape = 21, size = 1.5, stroke = 0.4,
+               colour = LOW, fill = "white", inherit.aes = FALSE) +
+    geom_text(data = miss, aes(x = 4.6, y = name, label = k), size = pt(5), family = FONT,
+              colour = LOW, hjust = 0, inherit.aes = FALSE) +
+    geom_point(data = ctrl, aes(x = m, y = name), shape = 23, size = 1.6, stroke = 0.4,
+               colour = INK, fill = "white", inherit.aes = FALSE) +
+    scale_fill_manual(values = CALL_F, name = NULL, breaks = c("low", "within", "high"),
+                      labels = CALL_L[c("low", "within", "high")]) +
+    scale_x_continuous("percentile of the reference population", limits = c(0, 100),
+                       breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
+                       expand = expansion(mult = 0.018)) +
+    facet_grid(block ~ ., scales = "free_y", space = "free_y", switch = "y") +
+    labs(title = expression(bold("(a) One cohort: 56 "*italic("C. difficile")*" patients, one dot per patient")),
+         subtitle = "diamond, the 14 controls at their median; ring and count, patients in whom the feature is absent") +
+    guides(fill = guide_legend(override.aes = list(size = 2.2, stroke = 0.2))) +
+    theme(legend.position = "bottom", panel.grid.major.y = element_blank(),
+          axis.title.y = element_blank(), strip.placement = "outside")
+
+  # (b) nine cohorts, one dot per cohort median
+  cr <- read_csv(file.path(D, "f3_range_crc.csv"), show_col_types = FALSE) %>%
+    mutate(block = factor(block, c("Taxa", "Function")))
+  ordr2 <- cr %>% group_by(block, name) %>% summarise(m = median(median_pct_case, na.rm = TRUE), .groups = "drop") %>%
+    arrange(block, m) %>% pull(name)
+  cr <- cr %>% mutate(name = factor(name, unique(ordr2)),
+                      call = ifelse(median_pct_case < 2.5, "low", ifelse(median_pct_case > 97.5, "high", "within")),
+                      call = factor(call, names(CALL_F)))
+  b <- ggplot(cr, aes(y = name)) + ref_band() +
+    geom_segment(aes(x = median_pct_control, xend = median_pct_case, yend = name), colour = AXIS, linewidth = 0.22) +
+    geom_point(aes(x = median_pct_control), shape = 23, size = 1.15, stroke = 0.3, colour = MUTED, fill = "white") +
+    geom_point(aes(x = median_pct_case, fill = call), shape = 21, size = 1.5, stroke = 0.12, colour = "white") +
+    scale_fill_manual(values = CALL_F, labels = CALL_L, name = NULL, drop = FALSE, guide = "none") +
+    scale_x_continuous("median percentile of the reference population", limits = c(0, 100),
+                       breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
+                       expand = expansion(mult = 0.018)) +
+    facet_grid(block ~ ., scales = "free_y", space = "free_y", switch = "y") +
+    labs(title = "(b) Nine colorectal cancer cohorts: each cohort's median, cases against its own controls",
+         subtitle = "diamond, a cohort's controls; dot, its cases; the pair joined by a segment") +
+    theme(panel.grid.major.y = element_blank(), axis.title.y = element_blank(), strip.placement = "outside")
+
+  p <- (a / b) + plot_layout(heights = c(1.0, 0.92)) + tags()
+  save_fig(p, "fig4", DOUBLE, 6.0)
 }
 
 # ======================================================================================== Figure 5: a population outside the range
@@ -494,24 +486,44 @@ fig5 <- function() {
   # diamond, which stays readable both where the two coincide and where they are a few points apart.
   cmp_pt <- function(w, sz, fl, st) geom_point(data = filter(cmp, who == w), aes(x = 100 * x, shape = who),
                                                size = sz, colour = INK, fill = fl, stroke = st)
-  b <- ggplot(bars, aes(y = name)) +
-    geom_tile(aes(x = x, width = w, fill = what), height = 0.68) +
-    cmp_pt("other healthy adults", 1.5, "white", 0.45) + cmp_pt("US participants, same study", 0.85, INK, 0.3) +
-    facet_grid(layer ~ ., scales = "free_y", space = "free_y") +
-    scale_fill_manual(values = CALLS, name = "Hadza samples") +
-    # breaks fix the order of the two keys, which the override below depends on
-    scale_shape_manual(values = c("US participants, same study" = 23, "other healthy adults" = 21),
-                       breaks = c("other healthy adults", "US participants, same study"), name = NULL) +
-    scale_y_discrete(labels = ital_lab(ital)) +
-    # enough left pad for the open circle of a comparator that sits at exactly 0 %, which the border otherwise clips
-    scale_x_continuous(limits = c(0, 78), breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0.045, 0))) +
-    labs(x = "samples outside the reference range", y = NULL, title = "the genera and gene families behind the shift") +
-    guides(fill = guide_legend(order = 1, ncol = 1, keywidth = unit(6, "pt"), keyheight = unit(6, "pt")),
-           shape = guide_legend(order = 2, ncol = 1, override.aes = list(size = c(1.5, 0.85), fill = c("white", INK), stroke = c(0.45, 0.3)))) +
-    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5), legend.position = "right",
-          strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5), panel.spacing.y = unit(5, "pt"))
-  p <- (a | b) + plot_layout(widths = c(1, 1.42)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig5", DOUBLE, 2.50)
+  # Panel (b) is Fig. 1c's geometry again: the reference band, and every Hadza sample's percentile against it, so that
+  # the genera driving the excess are read off the same axis as the shift itself rather than as a share bar.
+  hz <- read_csv(file.path(D, "f4_range_hadza.csv"), show_col_types = FALSE) %>%
+    filter(call != "not_assessable") %>%
+    mutate(block = factor(block, c("Common gut genera", "Gene families")), call = factor(call, names(CALL_F)))
+  stopifnot(!any(is.na(hz$call)))
+  hz_ord <- hz %>% filter(group == "Hadza (Tanzania)") %>% group_by(block, name) %>%
+    summarise(m = median(pct, na.rm = TRUE), .groups = "drop") %>% arrange(block, m) %>% pull(name)
+  hz <- mutate(hz, name = factor(name, unique(hz_ord)))
+  hadza <- filter(hz, group == "Hadza (Tanzania)")
+  other <- hz %>% filter(group == "Other baseline studies") %>% group_by(block, name) %>%
+    summarise(m = median(pct, na.rm = TRUE), .groups = "drop")
+  hmiss <- hadza %>% filter(is.na(pct)) %>% count(block, name, name = "k")
+  b <- ggplot(hadza, aes(y = name)) + ref_band() +
+    geom_point(data = filter(hadza, !is.na(pct)), aes(x = pct, fill = call), shape = 21, size = 1.0,
+               stroke = 0.1, colour = "white", position = position_jitter(height = 0.22, width = 0, seed = 7)) +
+    geom_point(data = hmiss, aes(x = 1.2, y = name), shape = 21, size = 1.4, stroke = 0.4,
+               colour = LOW, fill = "white", inherit.aes = FALSE) +
+    geom_text(data = hmiss, aes(x = 4.6, y = name, label = k), size = pt(5), family = FONT,
+              colour = LOW, hjust = 0, inherit.aes = FALSE) +
+    geom_point(data = other, aes(x = m, y = name), shape = 23, size = 1.5, stroke = 0.4,
+               colour = INK, fill = "white", inherit.aes = FALSE) +
+    scale_fill_manual(values = CALL_F, name = NULL, breaks = c("low", "within", "high"),
+                      labels = CALL_L[c("low", "within", "high")]) +
+    scale_y_discrete(labels = ital_lab(unique(as.character(filter(hz, block == "Common gut genera")$name)))) +
+    scale_x_continuous("percentile of the reference population", limits = c(0, 100),
+                       breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
+                       expand = expansion(mult = 0.018)) +
+    facet_grid(block ~ ., scales = "free_y", space = "free_y") +
+    labs(y = NULL, title = "the genera and gene families behind the shift",
+         subtitle = "one dot per Hadza sample; diamond, other baseline adults; ring and count, samples lacking it") +
+    guides(fill = guide_legend(override.aes = list(size = 2.2, stroke = 0.2))) +
+    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5),
+          legend.position = "bottom",
+          strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5),
+          panel.spacing.y = unit(5, "pt"))
+  p <- (a | b) + plot_layout(widths = c(0.82, 1.6)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
+  save_fig(p, "fig5", DOUBLE, 3.15)
 }
 
 args <- commandArgs(trailingOnly = TRUE); if (length(args) == 0) args <- paste0("fig", 1:5)
