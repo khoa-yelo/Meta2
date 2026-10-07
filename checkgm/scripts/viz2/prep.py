@@ -29,8 +29,15 @@ pool = set(inv[inv.study_bioproject.isin(st - {EC.STUDY}) & inv.is_primary_analy
 t = pd.read_parquet(f"{P}/work/s2/taxonomy_family_assembly.parquet", filters=[("feature_id", "==", fid)])
 t = t[t.analysis_id.isin(pool) & (t.proportion_mapped > 0)]
 med = ref.loc[fid, "p50"]; pd.DataFrame({"x": (t.clr - med) / np.log(2)}).to_csv(f"{OUT}/f1_density.csv", index=False)
-json.dump({k: float((ref.loc[fid, f"p{k}"] - med) / np.log(2)) for k in ["1", "2_5", "25", "75", "97_5", "99"]} | {"sample": float(fam[fam.label == DENS].x.iloc[0]), "pct": float(fam[fam.label == DENS].pct.iloc[0]), "n": int(len(t))},
+# The cohort behind this panel is the baseline rebuilt WITHOUT the patient's own study (EC.BUNDLE), not the shipped
+# baseline: 1,927 adults from 25 studies, of whom n_detected carry the family. The shipped baseline is a different and
+# larger cohort (1,941 adults, 26 studies, 1,936 of them carrying it), so the two must not be paired in a caption.
+# n_drawn is the number of points the density is estimated from and should track n_detected.
+mref = json.load(open(f"{EC.BUNDLE}/manifest.json"))
+json.dump({k: float((ref.loc[fid, f"p{k}"] - med) / np.log(2)) for k in ["1", "2_5", "25", "75", "97_5", "99"]} | {"sample": float(fam[fam.label == DENS].x.iloc[0]), "pct": float(fam[fam.label == DENS].pct.iloc[0]), "n": int(len(t)),
+           "n_drawn": int(len(t)), "n_detected": int(ref.loc[fid, "n_detected"]), "n_pool": int(mref["n_samples"]), "n_pool_studies": int(mref["n_studies"])},
           open(f"{OUT}/f1_density_meta.json", "w"))
+print(f"fig1 density: {DENS} carried by {int(ref.loc[fid, 'n_detected'])} of {mref['n_samples']} adults in the LOSO baseline ({mref['n_studies']} studies); {len(t)} points drawn")
 
 # ---- Fig 2: curation counts, calibration, reproduction from raw reads
 invr = pd.read_parquet(f"{P}/work/s0/inventory.parquet", columns=["analysis_id", "study_bioproject", "s0_status", "is_primary_analysis", "body_site_core"])
@@ -58,8 +65,14 @@ cal = [pd.DataFrame({"pipeline": "Assembly (MGnify v5)", "kind": "held-out cohor
 lo = pd.read_csv(f"{P}/results/s6/loso_within_pool.tsv", sep="\t"); scol = [c for c in lo.columns if c.startswith("study")][0]
 cal.append(pd.DataFrame({"pipeline": "Assembly (MGnify v5)", "kind": "baseline study left out", "layer": lo.layer.map(LAYER), "unit": lo[scol], "frac": lo.frac}))
 hb = pd.read_csv(f"{P}/results/s11/pipelineB_heldout.tsv", sep="\t"); lb = pd.read_csv(f"{P}/results/s11/pipelineB_loso_all.tsv", sep="\t")
+# All four series in this panel are the same per-study statistic: the MEAN over the study's samples of the per-sample share
+# of features outside the range. It has to be the mean, because that is the only summary the assembly tables carry (s6
+# frac_outside_mean; s6_loso_from_s12.py frac=("frac_outside_raw","mean")); the read tables carry both (s13_pipelineB_eval.py
+# frac_table) and lb["median"] was taken here until 2026-10-06, which mixed medians into a panel of means. The per-sample
+# distribution is right-skewed (mean > median on 93/93 read leave-one-study-out rows), so the mix displaced the read
+# "baseline study left out" points left of every other series: family 3.92 % against 5.60 % on the matched statistic.
 cal.append(pd.DataFrame({"pipeline": "Read (cMD3)", "kind": "held-out cohort", "layer": hb.layer.map(LAYER), "unit": hb.study, "frac": hb["mean"]}))
-cal.append(pd.DataFrame({"pipeline": "Read (cMD3)", "kind": "baseline study left out", "layer": lb.layer.map(LAYER), "unit": lb.study, "frac": lb["median"]}))
+cal.append(pd.DataFrame({"pipeline": "Read (cMD3)", "kind": "baseline study left out", "layer": lb.layer.map(LAYER), "unit": lb.study, "frac": lb["mean"]}))
 pd.concat(cal).dropna(subset=["layer"]).to_csv(f"{OUT}/f2_calibration.csv", index=False)
 ta = pd.read_csv(f"{P}/results/s11/tierA_anchor_compare.tsv", sep="\t"); ta = ta[ta.variant == "default"]
 tb = pd.read_csv(f"{P}/results/s11/pipelineB_fidelity.tsv", sep="\t"); tb = tb[~tb.deposit_mismatch.astype(bool)]
@@ -68,31 +81,42 @@ fid_ = pd.concat([pd.DataFrame({"pipeline": "Assembly (MGnify v5)", "layer": ta.
 fid_.dropna().to_csv(f"{OUT}/f2_fidelity.csv", index=False)
 
 # ---- Fig 3: AUROC per study and method
-A = pd.read_csv(f"{P}/results/s8/loso_auroc.tsv", sep="\t"); A = A[A.study != "POOLED"]
-# the assembly reference_relative set spans family, genus, eggNOG KO and module layers (s8_evaluate.LAYERS_RR), so it is
-# "both"; s8 also stores the taxonomy-only and genes-only ablations, which give the same decomposition as the read pipeline
-mapA = {"reference_relative": "checkGM percentiles, taxa + genes", "reference_relative_taxonomy_only": "checkGM percentiles",
-        "reference_relative_genes_only": "checkGM percentiles, genes only", "raw_clr": "Raw abundances",
-        "alpha_diversity": "Alpha diversity", "health_index": "GMHI (genus approx.)"}
-A = A[A.feature_set.isin(mapA)]; fa = pd.DataFrame({"pipeline": "Assembly pipeline (11 studies)", "method": A.feature_set.map(mapA), "study": A.study, "auroc": A.auroc_loso, "unseen": True})
+# The assembly pipeline is not plotted here. checkGM ships no assembly deviation score --- the shipped score is defined
+# on the read pipeline's species percentiles and refuses an assembly assessment --- so every assembly bar would be a
+# model nobody can run. Its representation check (percentiles against raw centred log-ratios, same logistic regression)
+# is reported in the text from results/s8/report_loso_l1.md.
 H = pd.read_csv(f"{P}/results/s15/health_indices_B.tsv", sep="\t"); base = H.drop_duplicates("study").set_index("study")
-rows = [("checkGM percentiles", base.percentiles), ("Raw abundances", base.raw_abundances)]
-for n, lab in [("GMHI", "GMHI (published)"), ("Shannon", "Alpha diversity"), ("GMWI2", "GMWI2 (published)")]:
+# Every bar is a logistic regression or a published score evaluated as published: no random forest anywhere, and no
+# checkGM variant that the software does not distribute. The deviation score plotted is therefore the percentile-only
+# model that `checkgm score` applies, not the pre-specified variant whose species-presence features carry the
+# [Collinsella] batch artifact; that one is reported in the text. Both it and the raw-abundance comparator are taken
+# from the one rawcmp run, so the pair is matched by construction rather than assembled from two runs.
+RC = pd.read_csv(f"{P}/results/s16/health_score_B_rawcmp.tsv", sep="\t")
+rows = [("checkGM deviation score", RC.query("feature_set == 'pct'").set_index("study").auroc),
+        ("raw abundances, same model", RC.query("feature_set == 'raw'").set_index("study").auroc)]
+for n, lab in [("GMWI2", "GMWI2 (published)"), ("GMHI", "GMHI (published)"), ("Shannon", "Alpha diversity")]:
     rows.append((lab, H[H["index"] == n].set_index("study").auroc_direct))
-HS = pd.read_csv(f"{P}/results/s16/health_score_B.tsv", sep="\t"); rows.append(("checkGM health score", HS[HS.feature_set == "pct+summary+presence"].set_index("study").auroc))
-# the same L1 model trained on raw CLR instead of percentiles, so the transformation is the only difference (s16 LAYERS=rawcmp)
-RC = f"{P}/results/s16/health_score_B_rawcmp.tsv"
-if os.path.exists(RC):
-    rows.append(("same score on raw abundances", pd.read_csv(RC, sep="\t").query("feature_set == 'raw+summary+presence'").set_index("study").auroc))
-# do gene families and pathways add anything? the same leave-one-study-out random forest on the function percentiles, and on
-# taxa + function together (results/s11/pipelineB_loso_auroc.tsv, written by s13)
-LF = pd.read_csv(f"{P}/results/s11/pipelineB_loso_auroc.tsv", sep="\t")
-LF = LF[(LF.training == "all_studies") & (LF.features == "reference_relative")]
-for fs, lab in [("function", "checkGM percentiles, genes only"), ("all", "checkGM percentiles, taxa + genes")]:
-    rows.append((lab, LF[LF.feature_set == fs].set_index("study").auroc))
+# The fraction outside, the one deviation summary that needs no labels at all, scored the same way the published indices
+# are: directly, higher meaning more case-like. Species is the layer it does best on (family 0.52, genus 0.53), so the
+# comparison is not stacked against it. It is in the figure because its distance from the score is the paper's argument
+# for per-feature output: the same percentiles, collapsed to one number, lose almost all of their discrimination.
+from sklearn.metrics import roc_auc_score
+_elig = S[S.role.isin(["reference_pool", "heldout_healthy", "case_control"]) & S.status.isin(["included", "NOT_CONTROL"])]
+_lab = _elig.set_index("sample_key")[["condition", "study"]].assign(y=lambda d: d.condition.ne("control").astype(int))
+_fo = (pd.read_parquet(f"{P}/work/s12/B/oos_summaries.parquet")
+         .query("layer == 'taxonomy_species'").set_index("sample").frac_outside_raw)
+_rows = {}
+for _st in base.index:
+    _ix = _lab.index[_lab.study == _st]
+    _y, _x = _lab.loc[_ix, "y"], _fo.reindex(_ix)
+    _ok = _x.notna()
+    if _ok.sum() >= 20 and _y[_ok].nunique() == 2:
+        _rows[_st] = roc_auc_score(_y[_ok], _x[_ok])
+rows.append(("fraction outside", pd.Series(_rows)))
 fb = pd.concat([pd.DataFrame({"method": lab, "study": s_.index, "auroc": s_.values}) for lab, s_ in rows])
 fb["unseen"] = ~fb.study.map(base.in_gmwi2_training).astype(bool)
-f3 = pd.concat([fa, fb.assign(pipeline="Read pipeline (14 studies)"), fb[fb.unseen].assign(pipeline="Read pipeline, 4 studies GMWI2 never saw")])
+f3 = pd.concat([fb.assign(pipeline="Read pipeline (14 studies)"),
+                fb[fb.unseen].assign(pipeline="Read pipeline, 4 studies GMWI2 never saw")])
 f3.to_csv(f"{OUT}/f3_auroc.csv", index=False)
 
 # ---- Fig 4: C. difficile cohort (assembly) and colorectal cancer cohorts (read)

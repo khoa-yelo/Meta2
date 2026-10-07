@@ -297,19 +297,19 @@ fig3 <- function() {
   # prep.py now names the three assembly feature sets at source (reference_relative = taxa and genes together, plus the
   # taxonomy-only and genes-only ablations from results/s8), so no relabelling is needed here
   # row labels drop the tool name: the violet bars are checkGM output, the greys are the comparators
-  au$method <- recode(au$method, "GMHI (genus approx.)" = "GMHI, genus approx.", "GMHI (published)" = "GMHI", "GMWI2 (published)" = "GMWI2",
-                      "Alpha diversity" = "alpha diversity", "Raw abundances" = "raw abundances",
-                      "checkGM health score" = "health score", "checkGM percentiles" = "percentiles, taxa",
-                      "checkGM percentiles, genes only" = "percentiles, genes", "checkGM percentiles, taxa + genes" = "percentiles, both",
-                      "same score on raw abundances" = "same score, raw input")
+  au$method <- recode(au$method, "GMHI (published)" = "GMHI", "GMWI2 (published)" = "GMWI2",
+                      "Alpha diversity" = "alpha diversity",
+                      "checkGM deviation score" = "deviation score",
+                      "raw abundances, same model" = "raw abundances, same model")
   # "14 of 15" rather than "14": fifteen case/control studies are curated in Fig. 2b, and the one with fewer than 20
   # cases and 20 controls (SankaranarayananK_2015) is held out of the benchmark, which the panel titles otherwise hide
-  lv <- c("assembly pipeline\n11 studies", "read pipeline\n14 of 15 studies", "read pipeline\n4 studies GMWI2 never saw")
-  au$pipeline <- factor(recode(au$pipeline, "Assembly pipeline (11 studies)" = lv[1], "Read pipeline (14 studies)" = lv[2],
-                               "Read pipeline, 4 studies GMWI2 never saw" = lv[3]), lv)
-  OURS <- c("health score", "percentiles, taxa", "percentiles, genes", "percentiles, both")
+  lv <- c("read pipeline\n14 of 15 studies", "read pipeline\n4 studies GMWI2 never saw")
+  au$pipeline <- factor(recode(au$pipeline, "Read pipeline (14 studies)" = lv[1],
+                               "Read pipeline, 4 studies GMWI2 never saw" = lv[2]), lv)
+  OURS <- c("deviation score")
+  stopifnot(all(OURS %in% au$method))   # a rename must not silently drop the violet grouping
   s <- au %>% group_by(pipeline, method) %>% summarise(m = mean(auroc), n = n()) %>% ungroup() %>%
-    mutate(lab = ifelse(method == "GMWI2" & pipeline == lv[2], "GMWI2\u2020", method), key = paste(pipeline, method),
+    mutate(lab = ifelse(method == "GMWI2" & pipeline == lv[1], "GMWI2\u2020", method), key = paste(pipeline, method),
            grp = ifelse(method %in% OURS, "checkGM", ifelse(method == "GMWI2", "GMWI2", "other")))
   # facet_wrap gives every panel the same height, so the four-method assembly panel would draw its bars half again as
   # thick as the nine-method read panels for the same quantity on the same axis. Blank rows pad the short panel to nine,
