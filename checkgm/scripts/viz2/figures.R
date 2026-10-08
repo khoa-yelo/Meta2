@@ -112,19 +112,13 @@ fig1 <- function() {
     box(3.2, 4.88, 0.56, 0.95, "scored against the reference", "1,941 adults, 26 studies;\nstatistics only, no samples", NEUT_BG, PA) +
     box(3.2, 4.88, 0.08, 0.47, "scored against the reference", "6,494 adults, 19 studies;\nstatistics only, no samples", NEUT_BG, PB) +
     seg(4.9, 0.755, 4.99, 0.755) + seg(4.9, 0.275, 4.99, 0.275) + seg(4.99, 0.275, 4.99, 0.755) + arr(4.99, 0.515, 5.11, 0.515) +
-    geom_polygon(data = rr(5.12, 7.13, 0.08, 0.95), aes(x, y), fill = "white", colour = INK2, linewidth = 0.35) +
-    annotate("text", 5.21, 0.925, label = "report for every feature", size = pt(6.8), fontface = "bold", family = FONT, colour = INK, hjust = 0, vjust = 1)
-  # the eight items of the report card are spaced so that no two 6 pt lines come within a point of one another now that a
-  # canvas unit is 70.4 rather than 84.8 points tall (see the schematic helpers)
-  rows <- data.frame(y = c(0.655, 0.530, 0.265), lab = c("Oscillospiraceae", "Streptococcaceae", "lysine racemase"), s = c(6.03, 6.33, 6.74),
-                     col = c(LOW, WITHIN, HIGH), call = c("low", "within", "high"), face = c("italic", "italic", "plain"))
-  a <- a + annotate("segment", x = 5.21, xend = 7.04, y = 0.445, yend = 0.445, colour = GRID, linewidth = 0.5) +
-    annotate("text", 5.21, 0.765, label = "taxa", hjust = 0, size = pt(6.0), family = FONT, colour = MUTED, fontface = "italic") +
-    annotate("text", 5.21, 0.375, label = "genes and pathways", hjust = 0, size = pt(6.0), family = FONT, colour = MUTED, fontface = "italic")
-  for (i in 1:3) a <- a + range_row(6.1, 6.65, rows$y[i], 6.1, 6.27, 6.47, 6.65, 6.37, rows$s[i], rows$col[i]) +
-    annotate("text", 5.21, rows$y[i], label = rows$lab[i], hjust = 0, size = pt(6.2), family = FONT, colour = INK2, fontface = rows$face[i]) +
-    annotate("text", 6.83, rows$y[i], label = rows$call[i], hjust = 0, size = pt(6.2), family = FONT, colour = rows$col[i], fontface = "bold")
-  a <- a + annotate("text", 6.375, 0.115, label = "reference range", size = pt(6.0), family = FONT, colour = MUTED, vjust = 0)
+    # The schematic used to end in a thumbnail of the report, which panel (c) draws properly and Fig. 3 draws for a
+    # whole cohort: three renderings of one idea inside one figure. The last step is the pair of outputs instead, which
+    # is also what the flow was missing, the deviation score having appeared nowhere in it.
+    box(5.12, 7.13, 0.56, 0.95, "a report for every feature",
+        "percentile, and a call of within,\nbelow or above the range (c)", NEUT_BG, INK2) +
+    box(5.12, 7.13, 0.08, 0.47, "a deviation score",
+        "one number per sample,\nweighted over its percentiles", NEUT_BG, ACC)
 
   # b: how one feature is placed
   m <- jnum(file.path(D, "f1_density_meta.json")); dz <- read_csv(file.path(D, "f1_density.csv"))
