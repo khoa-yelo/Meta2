@@ -496,8 +496,6 @@ fig5 <- function() {
     summarise(m = median(pct, na.rm = TRUE), .groups = "drop") %>% arrange(block, m) %>% pull(name)
   hz <- mutate(hz, name = factor(name, unique(hz_ord)))
   hadza <- filter(hz, group == "Hadza (Tanzania)")
-  other <- hz %>% filter(group == "Other baseline studies") %>% group_by(block, name) %>%
-    summarise(m = median(pct, na.rm = TRUE), .groups = "drop")
   hmiss <- hadza %>% filter(is.na(pct)) %>% count(block, name, name = "k")
   b <- ggplot(hadza, aes(y = name)) + ref_band() +
     geom_point(data = filter(hadza, !is.na(pct)), aes(x = pct, fill = call), shape = 21, size = 1.0,
@@ -506,8 +504,6 @@ fig5 <- function() {
                colour = LOW, fill = "white", inherit.aes = FALSE) +
     geom_text(data = hmiss, aes(x = 4.6, y = name, label = k), size = pt(5), family = FONT,
               colour = LOW, hjust = 0, inherit.aes = FALSE) +
-    geom_point(data = other, aes(x = m, y = name), shape = 23, size = 1.5, stroke = 0.4,
-               colour = INK, fill = "white", inherit.aes = FALSE) +
     scale_fill_manual(values = CALL_F, name = NULL, breaks = c("low", "within", "high"),
                       labels = CALL_L[c("low", "within", "high")]) +
     scale_y_discrete(labels = ital_lab(unique(as.character(filter(hz, block == "Common gut genera")$name)))) +
@@ -516,7 +512,7 @@ fig5 <- function() {
                        expand = expansion(mult = 0.018)) +
     facet_grid(block ~ ., scales = "free_y", space = "free_y") +
     labs(y = NULL, title = "the genera and gene families behind the shift",
-         subtitle = "one dot per Hadza sample; diamond, other baseline adults; ring and count, samples lacking it") +
+         subtitle = "one dot per Hadza sample; ring and count, samples lacking it") +
     guides(fill = guide_legend(override.aes = list(size = 2.2, stroke = 0.2))) +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5),
           legend.position = "bottom",
