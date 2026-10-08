@@ -267,9 +267,14 @@ _lost = ((_w["low"]["C. difficile cases"] + _w["expected_but_missing"]["C. diffi
 _gain = (_w["high"]["C. difficile cases"] - _w["high"]["controls"]).sort_values()
 _pick_ko = list(_lost.tail(3).index) + list(_gain.tail(2).index)
 
-_picked = pd.read_csv(f"{OUT}/f4_cdi_calls.csv")["name"].drop_duplicates().tolist()
+# the published panel already records which side each family was picked for; carrying it through means the row's
+# label states the reason the row is there, rather than whichever share happens to be larger
+_pub = pd.read_csv(f"{OUT}/f4_cdi_calls.csv").drop_duplicates("name")
+_side_of = dict(zip(_pub["name"], _pub["side"]))
+_picked = _pub["name"].tolist()
 _byname = {v: k for k, v in NAME.items()}
 _rows = []
+_ko_side = {str(f): ("lost" if i < 3 else "gained") for i, f in enumerate(_pick_ko)}
 for layer, fids, blk in (("taxonomy_family", [_byname[n] for n in _picked if n in _byname], "Bacterial families"),
                          ("ko_eggnog", [str(x) for x in _pick_ko], "Gene families")):
     for fid in dict.fromkeys(str(x) for x in fids):
@@ -277,7 +282,8 @@ for layer, fids, blk in (("taxonomy_family", [_byname[n] for n in _picked if n i
         nm = NAME.get(fid) or KNAME.get(fid, fid)
         for r in g.itertuples():
             _rows.append({"block": blk, "name": nm, "sample": r.analysis_id, "group": r.group,
-                          "pct": r.percentile, "call": r.call})
+                          "pct": r.percentile, "call": r.call,
+                          "side": _side_of.get(nm) or _ko_side.get(fid, "lost")})
 f3r = pd.DataFrame(_rows)
 f3r.to_csv(f"{OUT}/f3_range_cdi.csv", index=False)
 print(f"f3 report view: {f3r['name'].nunique()} features, {f3r['sample'].nunique()} samples, "
@@ -322,6 +328,9 @@ _keep = (_A.groupby(["block", "name"]).median_shift.first().abs().sort_values(as
            .groupby(level=0).head(6).index)
 _A = _A.set_index(["block", "name"]).loc[_keep.unique()].reset_index()
 _A["sig"] = (_A.q <= 0.05) & (_A["shift"].abs() >= 10)
-_A[["block", "name", "study", "median_pct_case", "median_pct_control", "shift", "sig", "n_studies"]] \
+# median_shift and n_studies come from the consistent-shift table and are the pair the running text quotes
+# ("Lachnospiraceae in four cohorts at a median of -35 points"); a median taken over all nine cohorts here instead
+# would put a different number beside the same name.
+_A[["block", "name", "study", "median_pct_case", "median_pct_control", "shift", "sig", "n_studies", "median_shift"]] \
   .to_csv(f"{OUT}/f3_range_crc.csv", index=False)
 print(f"f3 crc view: {_A.groupby('block')['name'].nunique().to_dict()}, {_A.study.nunique()} cohorts")

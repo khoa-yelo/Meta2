@@ -385,11 +385,25 @@ fig4 <- function() {
   # an absent feature has no percentile; it is drawn as an open ring at the floor so that shape, not colour alone,
   # carries the distinction, and so that the row's absences are visible rather than silently dropped
   miss <- cases %>% filter(is.na(pct)) %>% count(block, name, name = "k")
+  # labelled by the side the feature was selected for, so the number states why the row is in the panel
+  n_cases <- dplyr::n_distinct(cases$sample)
+  share <- cases %>% group_by(block, name, side) %>%
+    summarise(lost = sum(call %in% c("low", "expected_but_missing")) / n_cases,
+              below = sum(call == "low") / n_cases,
+              gain = sum(call == "high") / n_cases, .groups = "drop") %>%
+    # a lost row is lost either by falling below the range or by being absent; the label names whichever it is, so
+    # that the number beside a row is the finding that put it there
+    mutate(gone = lost - below,
+           lab = ifelse(side == "gained", sprintf("%.0f%% above", 100 * gain),
+                        ifelse(gone > below, sprintf("%.0f%% absent", 100 * gone), sprintf("%.0f%% below", 100 * below))),
+           col = ifelse(side == "gained", HIGH, LOW))
   ctrl <- cd %>% filter(group == "controls") %>% group_by(block, name) %>%
     summarise(m = median(pct, na.rm = TRUE), .groups = "drop") %>% mutate(name = factor(name, unique(ordr)))
   a <- ggplot(cases, aes(y = name)) + ref_band() +
-    geom_point(data = filter(cases, !is.na(pct)), aes(x = pct, fill = call), shape = 21, size = 1.15,
-               stroke = 0.12, colour = "white",
+    geom_point(data = filter(cases, !is.na(pct), call == "within"), aes(x = pct), shape = 16, size = 0.62,
+               colour = WITHIN, alpha = 0.5, position = position_jitter(height = 0.2, width = 0, seed = 4)) +
+    geom_point(data = filter(cases, !is.na(pct), call != "within"), aes(x = pct, fill = call), shape = 21,
+               size = 1.7, stroke = 0.22, colour = "white",
                position = position_jitter(height = 0.2, width = 0, seed = 4)) +
     geom_point(data = miss, aes(x = 1.2, y = name), shape = 21, size = 1.5, stroke = 0.4,
                colour = LOW, fill = "white", inherit.aes = FALSE) +
@@ -397,15 +411,19 @@ fig4 <- function() {
               colour = LOW, hjust = 0, inherit.aes = FALSE) +
     geom_point(data = ctrl, aes(x = m, y = name), shape = 23, size = 1.6, stroke = 0.4,
                colour = INK, fill = "white", inherit.aes = FALSE) +
-    scale_fill_manual(values = CALL_F, name = NULL, breaks = c("low", "within", "high"),
-                      labels = CALL_L[c("low", "within", "high")]) +
-    scale_x_continuous("percentile of the reference population", limits = c(0, 100),
+    geom_text(data = share, aes(x = 103, y = name, label = lab, colour = col), hjust = 0, size = pt(5.6),
+              family = FONT, inherit.aes = FALSE) +
+    scale_colour_identity() +
+    scale_fill_manual(values = CALL_F, name = NULL, breaks = c("low", "high"),
+                      labels = CALL_L[c("low", "high")]) +
+    # room to the right of the range for the per-row label; the band and the breaks still end at 97.5
+    scale_x_continuous("percentile of the reference population", limits = c(0, 152),
                        breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
-                       expand = expansion(mult = 0.018)) +
+                       expand = expansion(mult = c(0.018, 0))) +
     facet_grid(block ~ ., scales = "free_y", space = "free_y", switch = "y") +
     labs(title = expression(bold("(a) One cohort: 56 "*italic("C. difficile")*" patients, one dot per patient")),
          subtitle = "diamond, the 14 controls at their median; ring and count, patients in whom the feature is absent") +
-    guides(fill = guide_legend(override.aes = list(size = 2.2, stroke = 0.2))) +
+    guides(fill = guide_legend(override.aes = list(size = 2.2, stroke = 0.25))) +
     theme(legend.position = "bottom", panel.grid.major.y = element_blank(),
           axis.title.y = element_blank(), strip.placement = "outside")
 
@@ -417,17 +435,26 @@ fig4 <- function() {
   cr <- cr %>% mutate(name = factor(name, unique(ordr2)),
                       call = ifelse(median_pct_case < 2.5, "low", ifelse(median_pct_case > 97.5, "high", "within")),
                       call = factor(call, names(CALL_F)))
+  # the shift is the quantity the text quotes and the panel's reason for existing, so it is stated per row and the
+  # segment is coloured by its direction; a grey segment leaves the reader to measure it off the axis
+  shift <- cr %>% group_by(block, name) %>%
+    summarise(m = dplyr::first(median_shift), k = dplyr::first(n_studies), .groups = "drop") %>%
+    mutate(lab = sprintf("%s%.0f in %d", ifelse(m < 0, MINUS, "+"), abs(m), k), col = ifelse(m < 0, LOW, HIGH))
+  cr <- left_join(cr, select(shift, block, name, dir = m), by = c("block", "name"))
   b <- ggplot(cr, aes(y = name)) + ref_band() +
-    geom_segment(aes(x = median_pct_control, xend = median_pct_case, yend = name), colour = AXIS, linewidth = 0.22) +
-    geom_point(aes(x = median_pct_control), shape = 23, size = 1.15, stroke = 0.3, colour = MUTED, fill = "white") +
-    geom_point(aes(x = median_pct_case, fill = call), shape = 21, size = 1.5, stroke = 0.12, colour = "white") +
-    scale_fill_manual(values = CALL_F, labels = CALL_L, name = NULL, drop = FALSE, guide = "none") +
-    scale_x_continuous("median percentile of the reference population", limits = c(0, 100),
+    geom_segment(aes(x = median_pct_control, xend = median_pct_case, yend = name,
+                     colour = ifelse(dir < 0, LOW, HIGH)), linewidth = 0.32, alpha = 0.55) +
+    geom_point(aes(x = median_pct_control), shape = 23, size = 1.1, stroke = 0.28, colour = MUTED, fill = "white") +
+    geom_point(aes(x = median_pct_case, colour = ifelse(dir < 0, LOW, HIGH)), shape = 16, size = 1.45) +
+    geom_text(data = shift, aes(x = 103, y = name, label = lab, colour = col), hjust = 0, size = pt(5.6),
+              family = FONT, inherit.aes = FALSE) +
+    scale_colour_identity() +
+    scale_x_continuous("median percentile of the reference population", limits = c(0, 152),
                        breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
-                       expand = expansion(mult = 0.018)) +
+                       expand = expansion(mult = c(0.018, 0))) +
     facet_grid(block ~ ., scales = "free_y", space = "free_y", switch = "y") +
     labs(title = "(b) Nine colorectal cancer cohorts: each cohort's median, cases against its own controls",
-         subtitle = "diamond, a cohort's controls; dot, its cases; the pair joined by a segment") +
+         subtitle = "diamond, a cohort's controls; dot, its cases; label, the median shift and the cohorts it holds in") +
     theme(panel.grid.major.y = element_blank(), axis.title.y = element_blank(), strip.placement = "outside")
 
   p <- (a / b) + plot_layout(heights = c(1.0, 0.92)) + tags()
@@ -497,19 +524,34 @@ fig5 <- function() {
   hz <- mutate(hz, name = factor(name, unique(hz_ord)))
   hadza <- filter(hz, group == "Hadza (Tanzania)")
   hmiss <- hadza %>% filter(is.na(pct)) %>% count(block, name, name = "k")
+  n_hadza <- dplyr::n_distinct(hadza$sample)
+  hshare <- hadza %>% group_by(block, name) %>%
+    summarise(lost = sum(call %in% c("low", "expected_but_missing")) / n_hadza,
+              below = sum(call == "low") / n_hadza,
+              gain = sum(call == "high") / n_hadza, .groups = "drop") %>%
+    mutate(gone = lost - below,
+           lab = ifelse(gain > lost, sprintf("%.0f%% above", 100 * gain),
+                        ifelse(gone > below, sprintf("%.0f%% absent", 100 * gone), sprintf("%.0f%% below", 100 * below))),
+           col = ifelse(gain > lost, HIGH, LOW))
   b <- ggplot(hadza, aes(y = name)) + ref_band() +
-    geom_point(data = filter(hadza, !is.na(pct)), aes(x = pct, fill = call), shape = 21, size = 1.0,
-               stroke = 0.1, colour = "white", position = position_jitter(height = 0.22, width = 0, seed = 7)) +
+    geom_point(data = filter(hadza, !is.na(pct), call == "within"), aes(x = pct), shape = 16, size = 0.5,
+               colour = WITHIN, alpha = 0.45, position = position_jitter(height = 0.22, width = 0, seed = 7)) +
+    geom_point(data = filter(hadza, !is.na(pct), call != "within"), aes(x = pct, fill = call), shape = 21,
+               size = 1.35, stroke = 0.18, colour = "white",
+               position = position_jitter(height = 0.22, width = 0, seed = 7)) +
     geom_point(data = hmiss, aes(x = 1.2, y = name), shape = 21, size = 1.4, stroke = 0.4,
                colour = LOW, fill = "white", inherit.aes = FALSE) +
     geom_text(data = hmiss, aes(x = 4.6, y = name, label = k), size = pt(5), family = FONT,
               colour = LOW, hjust = 0, inherit.aes = FALSE) +
+    geom_text(data = hshare, aes(x = 103, y = name, label = lab, colour = col), hjust = 0, size = pt(5.6),
+              family = FONT, inherit.aes = FALSE) +
+    scale_colour_identity() +
     scale_fill_manual(values = CALL_F, name = NULL, breaks = c("low", "within", "high"),
                       labels = CALL_L[c("low", "within", "high")]) +
     scale_y_discrete(labels = ital_lab(unique(as.character(filter(hz, block == "Common gut genera")$name)))) +
-    scale_x_continuous("percentile of the reference population", limits = c(0, 100),
+    scale_x_continuous("percentile of the reference population", limits = c(0, 155),
                        breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
-                       expand = expansion(mult = 0.018)) +
+                       expand = expansion(mult = c(0.018, 0))) +
     facet_grid(block ~ ., scales = "free_y", space = "free_y") +
     labs(y = NULL, title = "the genera and gene families behind the shift",
          subtitle = "one dot per Hadza sample; ring and count, samples lacking it") +
