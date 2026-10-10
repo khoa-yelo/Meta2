@@ -554,8 +554,33 @@ fig5 <- function() {
           legend.position = "bottom",
           strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5),
           panel.spacing.y = unit(5, "pt"))
-  p <- (a | b) + plot_layout(widths = c(0.82, 1.6)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
-  save_fig(p, "fig5", DOUBLE, 3.15)
+  # (c) the same question asked of every population the baseline is built from, not just the one that fails loudest
+  cc <- read_csv(file.path(D, "f5_countries.csv"), show_col_types = FALSE) %>%
+    mutate(layer = factor(layer, c("family", "genus", "species")),
+           rep = replicates == "all three layers")
+  ord <- cc %>% filter(layer == "family") %>% arrange(pct) %>% pull(country)
+  cc <- mutate(cc, country = factor(country, ord))
+  spans <- cc %>% filter(layer == "family", studies >= 2) %>% distinct(country, study_lo, study_hi)
+  cl <- ggplot(cc, aes(y = country)) +
+    annotate("rect", xmin = -Inf, xmax = 5, ymin = -Inf, ymax = Inf, fill = BAND, alpha = 0.45) +
+    annotate("segment", x = 5, xend = 5, y = -Inf, yend = Inf, colour = MED, linewidth = 0.3, linetype = "22") +
+    # the span of a country's own study means: what a protocol alone is observed to do, and the yardstick the
+    # elevations have to clear before they can be read as a property of the population
+    geom_segment(data = spans, aes(x = study_lo, xend = study_hi, y = country, yend = country), colour = AXIS, linewidth = 1.1,
+                 lineend = "round", inherit.aes = FALSE) +
+    geom_point(aes(x = pct, shape = layer, colour = ifelse(rep, INK, MUTED), size = rep), stroke = 0.45, fill = "white") +
+    scale_colour_identity() + scale_size_manual(values = c(`TRUE` = 1.5, `FALSE` = 1.05), guide = "none") +
+    scale_shape_manual(values = c(family = 16, genus = 1, species = 4), name = NULL) +
+    scale_x_continuous("outside the range, per sample", labels = function(x) paste0(x, "%"),
+                       breaks = c(0, 5, 10), limits = c(0, 11.2), expand = expansion(0)) +
+    labs(y = NULL, title = "every population the baseline is built from",
+         subtitle = "grey bar spans that country's own studies") +
+    guides(shape = guide_legend(override.aes = list(size = 1.4, colour = INK))) +
+    theme(panel.grid.major.y = element_blank(), legend.position = "bottom",
+          axis.text.y = element_text(colour = INK, size = 6.2))
+
+  p <- ((a | cl) + plot_layout(widths = c(1, 0.92))) / b + plot_layout(heights = c(0.82, 1)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
+  save_fig(p, "fig5", DOUBLE, 5.1)
 }
 
 args <- commandArgs(trailingOnly = TRUE); if (length(args) == 0) args <- paste0("fig", 1:5)

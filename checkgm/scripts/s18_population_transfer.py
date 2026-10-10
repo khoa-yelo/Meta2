@@ -114,6 +114,17 @@ def main():
           "industrialised median on species; it is not counted. Japan and China run the other way, at the "
           "industrialised level on families and two to five points above it on genus and species, which is the more "
           "surprising result of the two: a reference range can transfer at one rank and not at another.\n"]
+    # figure data: one row per country per layer, plus the span of that country's own study means, which is the
+    # protocol yardstick the panel is read against
+    FIG = os.environ.get("CHECKGM_FIGDATA") or f"{P}/figures/v2/data"
+    span = per_study[per_study.layer == "family"].groupby("country").mean_frac.agg(["min", "max", "size"]) * 100
+    span["size"] = span["size"] / 100
+    f = keep[["layer", "country", "pct", "studies", "n"]].copy()
+    f["replicates"] = f.country.map(exc["replicates"])
+    f = f.join(span[["min", "max"]].rename(columns={"min": "study_lo", "max": "study_hi"}), on="country")
+    f["expected"] = 5.0
+    f.to_csv(f"{FIG}/f5_countries.csv", index=False)
+    print(f"wrote {FIG}/f5_countries.csv: {f.country.nunique()} countries x {f.layer.nunique()} layers")
     open(f"{OUT}/population_transfer.md", "w").write("\n".join(L))
     print("\n".join(L))
 
