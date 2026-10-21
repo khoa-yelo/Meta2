@@ -435,9 +435,9 @@ fig4 <- function() {
   cr <- left_join(cr, select(shift, block, name, dir = m), by = c("block", "name"))
   b <- ggplot(cr, aes(y = name)) + ref_band() +
     geom_segment(aes(x = median_pct_control, xend = median_pct_case, yend = name,
-                     colour = ifelse(dir < 0, LOW, HIGH)), linewidth = 0.32, alpha = 0.55) +
-    geom_point(aes(x = median_pct_control), shape = 23, size = 1.1, stroke = 0.28, colour = MUTED, fill = "white") +
-    geom_point(aes(x = median_pct_case, colour = ifelse(dir < 0, LOW, HIGH)), shape = 16, size = 1.45) +
+                     colour = ifelse(dir < 0, LOW, HIGH)), linewidth = 0.38, alpha = 0.75,
+                 arrow = arrow(length = unit(2.1, "pt"), type = "closed", angle = 22)) +
+    geom_point(aes(x = median_pct_control), shape = 23, size = 1.1, stroke = 0.3, colour = MUTED, fill = "white") +
     geom_text(data = shift, aes(x = 103, y = name, label = lab, colour = col), hjust = 0, size = pt(5.6),
               family = FONT, inherit.aes = FALSE) +
     scale_colour_identity() +
@@ -446,7 +446,7 @@ fig4 <- function() {
                        expand = expansion(mult = c(0.018, 0))) +
     facet_grid(block ~ ., scales = "free_y", space = "free_y", switch = "y") +
     labs(title = "(b) Nine colorectal cancer cohorts: each cohort's median, cases against its own controls",
-         subtitle = "diamond, a cohort's controls; dot, its cases; label, the median shift and the cohorts it holds in") +
+         subtitle = "one arrow per cohort, from its controls to its cases; label, the median shift and the cohorts it holds in") +
     theme(panel.grid.major.y = element_blank(), axis.title.y = element_blank(), strip.placement = "outside")
 
   p <- (a / b) + plot_layout(heights = c(1.0, 0.92)) + tags()
@@ -596,9 +596,9 @@ fig6 <- function() {
   ital <- ag %>% filter(layer != "Family") %>% distinct(name) %>% pull(name) %>% as.character()
   g <- ggplot(ag, aes(y = name)) + ref_band() +
     geom_segment(aes(x = med_young, xend = med_old, yend = name,
-                     colour = ifelse(median_shift < 0, LOW, HIGH)), linewidth = 0.32, alpha = 0.55) +
-    geom_point(aes(x = med_young), shape = 23, size = 1.1, stroke = 0.28, colour = MUTED, fill = "white") +
-    geom_point(aes(x = med_old, colour = ifelse(median_shift < 0, LOW, HIGH)), shape = 16, size = 1.45) +
+                     colour = ifelse(median_shift < 0, LOW, HIGH)), linewidth = 0.38, alpha = 0.75,
+                 arrow = arrow(length = unit(2.1, "pt"), type = "closed", angle = 22)) +
+    geom_point(aes(x = med_young), shape = 23, size = 1.1, stroke = 0.3, colour = MUTED, fill = "white") +
     geom_text(data = lab, aes(x = 103, y = name, label = txt, colour = col), hjust = 0, size = pt(5.6),
               family = FONT, inherit.aes = FALSE) +
     # the three that also clear the significance arm of the atlas's bar; the rest are unanimous in direction only
@@ -611,7 +611,7 @@ fig6 <- function() {
                        expand = expansion(mult = c(0.018, 0))) +
     labs(y = NULL,
          title = "ageing, read in the same units as disease",
-         subtitle = "diamond, 18-39; dot, 65+; one pair per study") +
+         subtitle = "one arrow per study: 18-39 to 65+") +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5))
   save_fig(g, "fig6", SINGLE, 3.25)
 }
