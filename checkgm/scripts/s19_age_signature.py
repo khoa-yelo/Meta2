@@ -57,6 +57,7 @@ def main():
                 continue
             rows.append({"layer": lab, "feature_id": str(fid), "study": study,
                          "n_young": len(y), "n_old": len(o),
+                         "med_young": float(y.median()), "med_old": float(o.median()),
                          "shift": float(o.median() - y.median()),
                          "p": float(mannwhitneyu(o, y, alternative="two-sided").pvalue)})
     F = pd.DataFrame(rows)
@@ -78,9 +79,20 @@ def main():
     agg.to_csv(f"{OUT}/age_signature.tsv", sep="\t", index=False)
 
     C = agg[agg.consistent]
-    top = pd.concat([C.nsmallest(8, "median_shift"), C.nlargest(8, "median_shift")]).drop_duplicates("feature_id")
-    F[F.feature_id.isin(set(top.feature_id))].merge(top[["feature_id", "median_shift", "consistent"]],
-                                                    on="feature_id").to_csv(f"{FIG}/f6_age.csv", index=False)
+    # The figure selects on direction rather than on the full bar. Three features clear the bar, which is too few to
+    # draw and is a statement about power rather than biology: the old arm is small, so a shift can be unanimous in
+    # direction across every study that sees it and still reach q <= 0.05 in only one of them. Shown instead are the
+    # features assessed in at least three studies with no study running counter, with those clearing the full bar
+    # marked, which is the honest picture and the one the text describes.
+    D = agg[(agg.studies >= MIN_STUDIES) & (agg[["n_up", "n_down"]].min(axis=1) == 0) &
+            (agg[["n_up", "n_down"]].max(axis=1) >= 2)]
+    top = pd.concat([D.nsmallest(7, "median_shift"), D.nlargest(7, "median_shift")]).drop_duplicates("feature_id")
+    # the figure draws the same geometry as the colorectal panel: both arm medians on the percentile axis, against the
+    # reference band, one pair per study, so ageing and disease are read in the same units and the same picture
+    fig = F[F.feature_id.isin(set(top.feature_id))].merge(
+        top[["feature_id", "median_shift", "consistent", "studies"]], on="feature_id")
+    fig.to_csv(f"{FIG}/f6_age.csv", index=False)
+    print(f"figure data: {fig.feature_id.nunique()} features x {fig.study.nunique()} studies -> {FIG}/f6_age.csv")
     L = [f"# Ageing read against the reference range (read pipeline)\n",
          f"{len(S):,} reference adults from {S.study.nunique()} studies carrying at least {MIN_ARM} aged 18-39 and "
          f"{MIN_ARM} aged 65+: {(S.arm=='young').sum():,} young, {(S.arm=='old').sum():,} old. Age is contrasted "

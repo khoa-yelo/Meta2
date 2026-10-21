@@ -6,8 +6,19 @@ Consistent (same direction and at least 10 points in 3 of 6 studies, significant
 
 ## The largest consistent shifts
 
-| layer   | name               |   studies |   n_up |   n_down |   n_sig |   median_shift |
-|:--------|:-------------------|----------:|-------:|---------:|--------:|---------------:|
-| Genus   | Bifidobacterium    |         4 |      0 |        3 |       2 |          -15.3 |
-| Family  | Bifidobacteriaceae |         4 |      0 |        4 |       2 |          -12.4 |
-| Family  | Clostridiaceae     |         5 |      5 |        0 |       3 |           21.4 |
+| layer   | name                         |   studies |   n_up |   n_down |   n_sig |   median_shift |
+|:--------|:-----------------------------|----------:|-------:|---------:|--------:|---------------:|
+| Family  | Veillonellaceae              |         3 |      0 |        3 |       1 |          -20   |
+| Genus   | Dialister                    |         3 |      0 |        2 |       0 |          -18.3 |
+| Genus   | Bifidobacterium              |         4 |      0 |        3 |       2 |          -15.3 |
+| Species | Bifidobacterium adolescentis |         4 |      0 |        3 |       1 |          -14.6 |
+| Genus   | Allocoprococcus              |         5 |      0 |        3 |       1 |          -12.9 |
+| Genus   | Flavonifractor               |         3 |      0 |        2 |       0 |          -12.4 |
+| Family  | Bifidobacteriaceae           |         4 |      0 |        4 |       2 |          -12.4 |
+| Family  | Streptococcaceae             |         4 |      2 |        0 |       1 |            8.4 |
+| Genus   | Escherichia                  |         4 |      2 |        0 |       0 |            9.6 |
+| Species | Alistipes shahii             |         3 |      2 |        0 |       0 |           10.3 |
+| Genus   | Slackia                      |         4 |      2 |        0 |       1 |           11.9 |
+| Genus   | Clostridium                  |         5 |      5 |        0 |       1 |           15.7 |
+| Species | Slackia isoflavoniconvertens |         4 |      2 |        0 |       1 |           16.5 |
+| Family  | Clostridiaceae               |         5 |      5 |        0 |       3 |           21.4 |

@@ -399,10 +399,8 @@ fig4 <- function() {
     geom_point(data = filter(cases, !is.na(pct), call != "within"), aes(x = pct, fill = call), shape = 21,
                size = 1.7, stroke = 0.22, colour = "white",
                position = position_jitter(height = 0.2, width = 0, seed = 4)) +
-    geom_point(data = miss, aes(x = 1.2, y = name), shape = 21, size = 1.5, stroke = 0.4,
+    geom_point(data = miss, aes(x = -9, y = name), shape = 21, size = 1.5, stroke = 0.4,
                colour = LOW, fill = "white", inherit.aes = FALSE) +
-    geom_text(data = miss, aes(x = 4.6, y = name, label = k), size = pt(5), family = FONT,
-              colour = LOW, hjust = 0, inherit.aes = FALSE) +
     geom_point(data = ctrl, aes(x = m, y = name), shape = 23, size = 1.6, stroke = 0.4,
                colour = INK, fill = "white", inherit.aes = FALSE) +
     geom_text(data = share, aes(x = 103, y = name, label = lab, colour = col), hjust = 0, size = pt(5.6),
@@ -411,12 +409,12 @@ fig4 <- function() {
     scale_fill_manual(values = CALL_F, name = NULL, breaks = c("low", "high"),
                       labels = CALL_L[c("low", "high")]) +
     # room to the right of the range for the per-row label; the band and the breaks still end at 97.5
-    scale_x_continuous("percentile of the reference population", limits = c(0, 152),
+    scale_x_continuous("percentile of the reference population", limits = c(-15, 152),
                        breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
-                       expand = expansion(mult = c(0.018, 0))) +
+                       expand = expansion(0)) +
     facet_grid(block ~ ., scales = "free_y", space = "free_y", switch = "y") +
     labs(title = expression(bold("(a) One cohort: 56 "*italic("C. difficile")*" patients, one dot per patient")),
-         subtitle = "diamond, the 14 controls at their median; ring and count, patients in whom the feature is absent") +
+         subtitle = "diamond, the 14 controls at their median; open ring at left, the feature is absent from some patients") +
     guides(fill = guide_legend(override.aes = list(size = 2.2, stroke = 0.25))) +
     theme(legend.position = "bottom", panel.grid.major.y = element_blank(),
           axis.title.y = element_blank(), strip.placement = "outside")
@@ -533,22 +531,20 @@ fig5 <- function() {
     geom_point(data = filter(hadza, !is.na(pct), call != "within"), aes(x = pct, fill = call), shape = 21,
                size = 1.35, stroke = 0.18, colour = "white",
                position = position_jitter(height = 0.22, width = 0, seed = 7)) +
-    geom_point(data = hmiss, aes(x = 1.2, y = name), shape = 21, size = 1.4, stroke = 0.4,
+    geom_point(data = hmiss, aes(x = -9, y = name), shape = 21, size = 1.4, stroke = 0.4,
                colour = LOW, fill = "white", inherit.aes = FALSE) +
-    geom_text(data = hmiss, aes(x = 4.6, y = name, label = k), size = pt(5), family = FONT,
-              colour = LOW, hjust = 0, inherit.aes = FALSE) +
     geom_text(data = hshare, aes(x = 103, y = name, label = lab, colour = col), hjust = 0, size = pt(5.6),
               family = FONT, inherit.aes = FALSE) +
     scale_colour_identity() +
     scale_fill_manual(values = CALL_F, name = NULL, breaks = c("low", "within", "high"),
                       labels = CALL_L[c("low", "within", "high")]) +
     scale_y_discrete(labels = ital_lab(unique(as.character(filter(hz, block == "Common gut genera")$name)))) +
-    scale_x_continuous("percentile of the reference population", limits = c(0, 155),
+    scale_x_continuous("percentile of the reference population", limits = c(-15, 155),
                        breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
-                       expand = expansion(mult = c(0.018, 0))) +
+                       expand = expansion(0)) +
     facet_grid(block ~ ., scales = "free_y", space = "free_y") +
     labs(y = NULL, title = "the genera and gene families behind the shift",
-         subtitle = "one dot per Hadza sample; ring and count, samples lacking it") +
+         subtitle = "one dot per Hadza sample; open ring at left, some samples lack it") +
     guides(fill = guide_legend(override.aes = list(size = 2.2, stroke = 0.2))) +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5),
           legend.position = "bottom",
@@ -584,4 +580,40 @@ fig5 <- function() {
 }
 
 args <- commandArgs(trailingOnly = TRUE); if (length(args) == 0) args <- paste0("fig", 1:5)
+# ================================================================== Figure 5: ageing read against the reference range
+# The colorectal panel's geometry exactly, so the two are read in the same units: the reference band, a cohort's two
+# arm medians on it, and the shift stated per row. Here the arms are age groups inside one study rather than cases and
+# controls, which is what removes the study confound.
+fig6 <- function() {
+  ag <- read_csv(file.path(D, "f6_age.csv"), show_col_types = FALSE) %>%
+    mutate(layer = factor(layer, c("Family", "Genus", "Species")))
+  lab <- ag %>% group_by(layer, name) %>%
+    summarise(m = first(median_shift), k = dplyr::n(), bar = first(consistent), .groups = "drop") %>%
+    mutate(txt = sprintf("%s%.0f in %d", ifelse(m < 0, MINUS, "+"), abs(m), k),
+           col = ifelse(m < 0, LOW, HIGH))
+  ord <- lab %>% arrange(m) %>% pull(name)
+  ag <- mutate(ag, name = factor(name, ord)); lab <- mutate(lab, name = factor(name, ord))
+  ital <- ag %>% filter(layer != "Family") %>% distinct(name) %>% pull(name) %>% as.character()
+  g <- ggplot(ag, aes(y = name)) + ref_band() +
+    geom_segment(aes(x = med_young, xend = med_old, yend = name,
+                     colour = ifelse(median_shift < 0, LOW, HIGH)), linewidth = 0.32, alpha = 0.55) +
+    geom_point(aes(x = med_young), shape = 23, size = 1.1, stroke = 0.28, colour = MUTED, fill = "white") +
+    geom_point(aes(x = med_old, colour = ifelse(median_shift < 0, LOW, HIGH)), shape = 16, size = 1.45) +
+    geom_text(data = lab, aes(x = 103, y = name, label = txt, colour = col), hjust = 0, size = pt(5.6),
+              family = FONT, inherit.aes = FALSE) +
+    # the three that also clear the significance arm of the atlas's bar; the rest are unanimous in direction only
+    geom_point(data = filter(lab, bar), aes(x = 136, y = name), shape = 8, size = 1.0, stroke = 0.35,
+               colour = INK, inherit.aes = FALSE) +
+    scale_colour_identity() +
+    scale_y_discrete(labels = ital_lab(ital)) +
+    scale_x_continuous("median percentile of the reference population", limits = c(0, 152),
+                       breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
+                       expand = expansion(mult = c(0.018, 0))) +
+    labs(y = NULL,
+         title = "ageing, read in the same units as disease",
+         subtitle = "diamond, 18-39; dot, 65+; one pair per study") +
+    theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5))
+  save_fig(g, "fig6", SINGLE, 3.25)
+}
+
 for (f in args) get(f)()
