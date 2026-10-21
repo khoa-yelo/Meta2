@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Figures 1-5 of the two-column paper, drawn with ggplot2 + patchwork from the tidy tables that scripts/viz2/prep.py writes to
 # figures/v2/data. One theme and one palette throughout:
-#   blue = below the healthy range (light blue = expected but missing), orange = above it, grey = within;
+#   blue = below the reference range (light blue = expected but missing), orange = above it, grey = within;
 #   violet = checkGM, greys = comparators; teal / ochre = assembly / read pipeline (schematics and curation only).
 # Usage: Rscript scripts/viz2/figures.R [fig1 fig2 ...]   (default: all). Output: figures/v2/figN.pdf (+ .png preview, 300 dpi).
 suppressPackageStartupMessages({library(ggplot2); library(patchwork); library(dplyr); library(tidyr); library(readr); library(scales)})
@@ -412,8 +412,9 @@ fig4 <- function() {
     scale_x_continuous("percentile of the reference population", limits = c(-15, 152),
                        breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
                        expand = expansion(0)) +
+    scale_y_discrete(labels = ital_lab(unique(as.character(filter(cases, block == "Bacterial families")$name)))) +
     facet_grid(block ~ ., scales = "free_y", space = "free_y", switch = "y") +
-    labs(title = expression(bold("(a) One cohort: 56 "*italic("C. difficile")*" patients, one dot per patient")),
+    labs(title = expression(bold("one cohort: 56 "*bolditalic("C. difficile")*" patients, one dot per patient")),
          subtitle = "diamond, the 14 controls at their median; open ring at left, the feature is absent from some patients") +
     guides(fill = guide_legend(override.aes = list(size = 2.2, stroke = 0.25))) +
     theme(legend.position = "bottom", panel.grid.major.y = element_blank(),
@@ -421,7 +422,7 @@ fig4 <- function() {
 
   # (b) nine cohorts, one dot per cohort median
   cr <- read_csv(file.path(D, "f3_range_crc.csv"), show_col_types = FALSE) %>%
-    mutate(block = factor(block, c("Taxa", "Function")))
+    mutate(block = factor(ifelse(block == "Function", "Pathways", block), c("Taxa", "Pathways")))
   ordr2 <- cr %>% group_by(block, name) %>% summarise(m = median(median_pct_case, na.rm = TRUE), .groups = "drop") %>%
     arrange(block, m) %>% pull(name)
   cr <- cr %>% mutate(name = factor(name, unique(ordr2)),
@@ -433,23 +434,30 @@ fig4 <- function() {
     summarise(m = dplyr::first(median_shift), k = dplyr::first(n_studies), .groups = "drop") %>%
     mutate(lab = sprintf("%s%.0f in %d", ifelse(m < 0, MINUS, "+"), abs(m), k), col = ifelse(m < 0, LOW, HIGH))
   cr <- left_join(cr, select(shift, block, name, dir = m), by = c("block", "name"))
-  b <- ggplot(cr, aes(y = name)) + ref_band() +
-    geom_segment(aes(x = median_pct_control, xend = median_pct_case, yend = name,
-                     colour = ifelse(dir < 0, LOW, HIGH)), linewidth = 0.38, alpha = 0.75,
+  # nine cohorts on one line overprinted one another, so each row's cohorts are fanned out a little in y, in a fixed
+  # study order, and every arrow can be followed on its own
+  lv <- levels(cr$name); studs <- sort(unique(cr$study))
+  cr <- mutate(cr, yr = as.numeric(name), y = yr + 0.66 * ((match(study, studs) - 1) / (length(studs) - 1) - 0.5))
+  shift <- mutate(shift, yr = as.numeric(factor(name, lv)))
+  ylab <- function(br) ital_lab(unique(as.character(filter(cr, block == "Taxa")$name)))(lv[br])
+  b <- ggplot(cr, aes(y = y)) + ref_band() +
+    geom_hline(yintercept = seq_along(lv)[-1] - 0.5, colour = "white", linewidth = 0.7) +
+    geom_segment(aes(x = median_pct_control, xend = median_pct_case, yend = y,
+                     colour = ifelse(median_pct_case < median_pct_control, LOW, HIGH)), linewidth = 0.4, alpha = 0.8,
                  arrow = arrow(length = unit(2.1, "pt"), type = "closed", angle = 22)) +
-    geom_point(aes(x = median_pct_control), shape = 23, size = 1.1, stroke = 0.3, colour = MUTED, fill = "white") +
-    geom_text(data = shift, aes(x = 103, y = name, label = lab, colour = col), hjust = 0, size = pt(5.6),
+    geom_text(data = shift, aes(x = 103, y = yr, label = lab, colour = col), hjust = 0, size = pt(5.6),
               family = FONT, inherit.aes = FALSE) +
     scale_colour_identity() +
     scale_x_continuous("median percentile of the reference population", limits = c(0, 152),
                        breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
                        expand = expansion(mult = c(0.018, 0))) +
+    scale_y_continuous(breaks = seq_along(lv), labels = ylab, expand = expansion(add = 0.45)) +
     facet_grid(block ~ ., scales = "free_y", space = "free_y", switch = "y") +
-    labs(title = "(b) Nine colorectal cancer cohorts: each cohort's median, cases against its own controls",
-         subtitle = "one arrow per cohort, from its controls to its cases; label, the median shift and the cohorts it holds in") +
+    labs(title = "nine colorectal cancer cohorts, cases against their own controls",
+         subtitle = "one arrow per cohort, from its controls' median to its cases'; label, median shift and cohorts holding it") +
     theme(panel.grid.major.y = element_blank(), axis.title.y = element_blank(), strip.placement = "outside")
 
-  p <- (a / b) + plot_layout(heights = c(1.0, 0.92)) + tags()
+  p <- (a / b) + plot_layout(heights = c(1.0, 0.92)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
   save_fig(p, "fig4", DOUBLE, 6.0)
 }
 
@@ -457,7 +465,7 @@ fig4 <- function() {
 fig5 <- function() {
   fr <- read_csv(file.path(D, "f5_frac.csv")) %>% filter(layer %in% c("Family", "KO (eggNOG)")) %>% mutate(pct = 100 * frac_outside_raw)
   n <- fr %>% distinct(sample, group) %>% count(group); nn <- setNames(n$n, n$group)
-  st <- c("Other baseline studies" = paste0("other healthy adults\n(28 studies, n = ", comma(nn[["Other baseline studies"]]), ")"),
+  st <- c("Other baseline studies" = paste0("other reference adults\n(28 studies, n = ", comma(nn[["Other baseline studies"]]), ")"),
           "US participants, same study" = paste0("US participants of the\nHadza study (n = ", nn[["US participants, same study"]], ")"),
           "Hadza (Tanzania)" = paste0("Hadza, Tanzania\n(n = ", nn[["Hadza (Tanzania)"]], ")"))
   fr$g <- factor(st[fr$group], rev(st)); fr$layer <- factor(ifelse(fr$layer == "Family", "bacterial families", "gene families (KOs)"), c("bacterial families", "gene families (KOs)"))
@@ -465,7 +473,7 @@ fig5 <- function() {
   a <- ggplot(fr, aes(x = pct, y = g)) + geom_vline(xintercept = 5, colour = MUTED, linewidth = 0.35, linetype = "22") +
     geom_boxplot(aes(fill = g), width = 0.62, outlier.size = 0.2, outlier.colour = GREY_L, outlier.stroke = 0, linewidth = 0.3, colour = INK2, median.colour = INK, median.linewidth = 0.7) +
     geom_text(data = md, aes(x = 64.5, label = paste0(sprintf("%.1f", m), "%")), hjust = 0, size = pt(6.4), family = FONT, colour = INK) +
-    facet_wrap(~layer, ncol = 1) + scale_fill_manual(values = setNames(c("#8A8274", "#C6C0B0", BAND), rev(st)), guide = "none") +
+    facet_wrap(~layer, ncol = 1) + scale_fill_manual(values = setNames(c(GREY_M, GREY_L, "#EDEDED"), rev(st)), guide = "none") +
     scale_x_continuous(breaks = c(0, 20, 40, 60), labels = function(x) paste0(x, "%"), expand = c(0, 0)) +
     # the window reaches the largest sample (61.2 %): a narrower one let the boxplot's own outliers escape into the right
     # margin, where they had no axis under them and read as stray ink
@@ -473,7 +481,7 @@ fig5 <- function() {
     # the dashed rule is named in the title, as it is in Fig. 2c, rather than labelled inside the panel: at the only y
     # that cleared the top box the label fell outside the panel altogether, into the facet strip's band, where it read as
     # a third item in the strip's own header row instead of as a note on the rule
-    labs(x = "features outside the reference range, per sample", y = NULL, title = "share of each sample outside the range (5 % expected)") +
+    labs(x = "fraction outside, per sample", y = NULL, title = "fraction outside the reference range (5% expected)") +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.4, lineheight = 0.95),
           strip.text = element_text(size = 6.5, face = "plain", colour = INK2), plot.margin = margin(2, 26, 2, 2))
   hdr <- data.frame(layer = factor("bacterial families", levels(fr$layer)), g = factor(st[[3]], levels(fr$g)))
@@ -496,8 +504,8 @@ fig5 <- function() {
   ital <- hz$name[hz$layer == "genera"]
   bars <- call_bars(hz %>% mutate(side = layer, dir = direction)) %>% mutate(name = factor(name, ordr), layer = side)
   cmp <- ge %>% filter(group != "Hadza (Tanzania)") %>% mutate(x = ifelse(direction == "above", high, low + missing),
-           who = factor(ifelse(group == "Other baseline studies", "other healthy adults", "US participants, same study"),
-                        c("US participants, same study", "other healthy adults")))
+           who = factor(ifelse(group == "Other baseline studies", "other reference adults", "US participants, same study"),
+                        c("US participants, same study", "other reference adults")))
   # both comparators are drawn on the row itself. A row is 7.4 pt of a figure this size and a legible marker is close to
   # 5 pt, so nudging the pair apart cost more than it bought: the two still overlapped, each hung out of its own bar, and
   # on the four rows where both sit at the same x the four marks of two rows formed a chain whose rows could not be told
@@ -509,7 +517,7 @@ fig5 <- function() {
   # the genera driving the excess are read off the same axis as the shift itself rather than as a share bar.
   hz <- read_csv(file.path(D, "f4_range_hadza.csv"), show_col_types = FALSE) %>%
     filter(call != "not_assessable") %>%
-    mutate(block = factor(block, c("Common gut genera", "Gene families")), call = factor(call, names(CALL_F)))
+    mutate(block = factor(ifelse(block == "Common gut genera", "Genera", block), c("Genera", "Gene families")), call = factor(call, names(CALL_F)))
   stopifnot(!any(is.na(hz$call)))
   hz_ord <- hz %>% filter(group == "Hadza (Tanzania)") %>% group_by(block, name) %>%
     summarise(m = median(pct, na.rm = TRUE), .groups = "drop") %>% arrange(block, m) %>% pull(name)
@@ -538,17 +546,18 @@ fig5 <- function() {
     scale_colour_identity() +
     scale_fill_manual(values = CALL_F, name = NULL, breaks = c("low", "within", "high"),
                       labels = CALL_L[c("low", "within", "high")]) +
-    scale_y_discrete(labels = ital_lab(unique(as.character(filter(hz, block == "Common gut genera")$name)))) +
+    scale_y_discrete(labels = ital_lab(unique(as.character(filter(hz, block == "Genera")$name)))) +
     scale_x_continuous("percentile of the reference population", limits = c(-15, 155),
                        breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5"),
                        expand = expansion(0)) +
-    facet_grid(block ~ ., scales = "free_y", space = "free_y") +
+    facet_grid(block ~ ., scales = "free_y", space = "free_y", switch = "y") +
     labs(y = NULL, title = "the genera and gene families behind the shift",
          subtitle = "one dot per Hadza sample; open ring at left, some samples lack it") +
     guides(fill = guide_legend(override.aes = list(size = 2.2, stroke = 0.2))) +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5),
           legend.position = "bottom",
-          strip.text.y = element_text(angle = -90, size = 6.2, face = "plain", colour = INK2, hjust = 0.5),
+          strip.placement = "outside", strip.clip = "off",
+          strip.text.y.left = element_text(angle = 90, size = 6.5, face = "bold", hjust = 0.5),
           panel.spacing.y = unit(5, "pt"))
   # (c) the same question asked of every population the baseline is built from, not just the one that fails loudest
   cc <- read_csv(file.path(D, "f5_countries.csv"), show_col_types = FALSE) %>%
@@ -567,24 +576,24 @@ fig5 <- function() {
     geom_point(aes(x = pct, shape = layer, colour = ifelse(rep, INK, MUTED), size = rep), stroke = 0.45, fill = "white") +
     scale_colour_identity() + scale_size_manual(values = c(`TRUE` = 1.5, `FALSE` = 1.05), guide = "none") +
     scale_shape_manual(values = c(family = 16, genus = 1, species = 4), name = NULL) +
-    scale_x_continuous("outside the range, per sample", labels = function(x) paste0(x, "%"),
+    scale_x_continuous("fraction outside, per sample", labels = function(x) paste0(x, "%"),
                        breaks = c(0, 5, 10), limits = c(0, 11.2), expand = expansion(0)) +
-    labs(y = NULL, title = "every population the baseline is built from",
+    labs(y = NULL, title = "each country in the reference",
          subtitle = "grey bar spans that country's own studies") +
     guides(shape = guide_legend(override.aes = list(size = 1.4, colour = INK))) +
     theme(panel.grid.major.y = element_blank(), legend.position = "bottom",
           axis.text.y = element_text(colour = INK, size = 6.2))
 
-  p <- ((a | cl) + plot_layout(widths = c(1, 0.92))) / b + plot_layout(heights = c(0.82, 1)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
+  p <- ((a | cl) + plot_layout(widths = c(1, 0.8))) / wrap_elements(full = b) + plot_layout(heights = c(0.82, 1)) + plot_annotation(tag_levels = "a") & theme(plot.tag = element_text(size = 9, face = "bold", family = FONT))
   save_fig(p, "fig5", DOUBLE, 5.1)
 }
 
-args <- commandArgs(trailingOnly = TRUE); if (length(args) == 0) args <- paste0("fig", 1:5)
+args <- commandArgs(trailingOnly = TRUE); if (length(args) == 0) args <- c("fig1", "fig3", "fig4", "fig5", "fig6")
 # ================================================================== Figure 5: ageing read against the reference range
 # The colorectal panel's geometry exactly, so the two are read in the same units: the reference band, a cohort's two
 # arm medians on it, and the shift stated per row. Here the arms are age groups inside one study rather than cases and
 # controls, which is what removes the study confound.
-fig6 <- function() {
+fig6_arrows <- function() {
   ag <- read_csv(file.path(D, "f6_age.csv"), show_col_types = FALSE) %>%
     mutate(layer = factor(layer, c("Family", "Genus", "Species")))
   lab <- ag %>% group_by(layer, name) %>%
@@ -613,7 +622,38 @@ fig6 <- function() {
          title = "ageing, read in the same units as disease",
          subtitle = "one arrow per study: 18-39 to 65+") +
     theme(panel.grid.major.y = element_blank(), axis.text.y = element_text(colour = INK, size = 6.5))
-  save_fig(g, "fig6", SINGLE, 3.25)
+  save_fig(g, "fig6_arrows", SINGLE, 3.25)
+}
+
+# ================================================================== Figure 5 (slope version): the headline ageing shifts
+# Two positions on x, the 18-39 and 65+ arms of one study; one line per study joining its two medians, so a decline
+# reads off the slope. Each line takes its own study's direction, which is what lets a study running against the
+# majority show as the one line sloping the other way.
+fig6 <- function() {
+  keep <- c("Bifidobacterium", "Bifidobacterium adolescentis", "Dialister", "Allocoprococcus", "Clostridiaceae", "Slackia")
+  ag <- read_csv(file.path(D, "f6_age.csv"), show_col_types = FALSE) %>% filter(name %in% keep) %>%
+    mutate(short = sub("^Bifidobacterium ", "B. ", name),
+           strip = sprintf('%s~~"%s%.0f in %d"', ifelse(layer == "Family", sprintf('"%s"', short), sprintf('italic("%s")', short)),
+                           ifelse(median_shift < 0, MINUS, "+"), abs(median_shift), studies))
+  strips <- ag %>% distinct(name, strip) %>% mutate(name = factor(name, keep)) %>% arrange(name) %>% pull(strip)
+  ag <- mutate(ag, strip = factor(strip, strips), col = ifelse(shift < 0, LOW, HIGH))
+  long <- ag %>% select(strip, study, col, `18-39` = med_young, `65+` = med_old) %>%
+    pivot_longer(c(`18-39`, `65+`), names_to = "arm", values_to = "pct") %>% mutate(x = ifelse(arm == "18-39", 1, 2))
+  g <- ggplot(long, aes(x, pct, group = study)) +
+    annotate("rect", xmin = -Inf, xmax = Inf, ymin = 2.5, ymax = 97.5, fill = BAND) +
+    annotate("rect", xmin = -Inf, xmax = Inf, ymin = 25, ymax = 75, fill = IQR) +
+    annotate("segment", x = -Inf, xend = Inf, y = 50, yend = 50, colour = MED, linewidth = 0.3) +
+    geom_line(aes(colour = col), linewidth = 0.5) +
+    geom_point(aes(colour = col), size = 1.1) +
+    facet_wrap(~strip, ncol = 2, labeller = label_parsed) +
+    scale_colour_identity() +
+    scale_x_continuous(NULL, breaks = 1:2, labels = c("aged 18-39", "aged 65+"), expand = expansion(add = 0.25)) +
+    scale_y_continuous("median percentile of the reference population", limits = c(0, 100),
+                       breaks = c(2.5, 25, 50, 75, 97.5), labels = c("2.5", "25", "50", "75", "97.5")) +
+    labs(subtitle = "one line per study, joining its younger and older adults") +
+    theme(panel.grid = element_blank(), panel.spacing.x = unit(10, "pt"), panel.spacing.y = unit(5, "pt"),
+          strip.text = element_text(size = 6.5, face = "plain", hjust = 0))
+  save_fig(g, "fig6", SINGLE, 4.1)
 }
 
 for (f in args) get(f)()
