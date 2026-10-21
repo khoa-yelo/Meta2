@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- 2026-10-21, **the health score is shipped for the assembly pipeline too.** `checkgm score` used to refuse every
+  assembly assessment, because its only model was fitted on read-pipeline percentiles. A second model,
+  `health_score_model_assembly.json`, is now packaged: the L1-penalised logistic regression of the assembly benchmark
+  (`reference_relative` features: percentiles of family, genus, eggNOG KO and KEGG module, plus per-layer deviation
+  counts; standardized; C chosen by grouped cross-validation over studies), refitted on all 11 assembly case/control
+  studies (2,294 samples, 855 non-zero coefficients). `score` now picks the model from the assessment's baseline
+  (`gut-reads-*` or `gut-assembly-*`, or failing a bundle id the layers scored). An assessment that identifies as neither
+  is still refused, and so is an explicit `--model` fitted on the other pipeline. The low-feature note uses the model's
+  own threshold (`thin_features`: 12 of 104 for the read model, 279 of 855 for the assembly one).
+
 - 2026-10-06, **the two pipelines are named after what they do, not by codename.** `tierA` becomes `assembly` and
   `pipelineB` becomes `read`, matching the words the CLI already used in `--pipeline assembly|read`. The word "tier"
   was carrying two unrelated meanings — the pipeline (tier A / tier B) and the baseline's inclusion rule (lenient /

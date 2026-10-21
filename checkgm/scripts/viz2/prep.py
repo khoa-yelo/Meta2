@@ -81,10 +81,11 @@ fid_ = pd.concat([pd.DataFrame({"pipeline": "Assembly (MGnify v5)", "layer": ta.
 fid_.dropna().to_csv(f"{OUT}/f2_fidelity.csv", index=False)
 
 # ---- Fig 3: AUROC per study and method
-# The assembly pipeline is not plotted here. checkGM ships no assembly deviation score --- the shipped score is defined
-# on the read pipeline's species percentiles and refuses an assembly assessment --- so every assembly bar would be a
-# model nobody can run. Its representation check (percentiles against raw centred log-ratios, same logistic regression)
-# is reported in the text from results/s8/report_loso_l1.md.
+# Both pipelines are benchmarked on the same metrics. The assembly rows come from the leave-one-study-out L1 logistic
+# regression of s8_evaluate.py (MODEL=l1, results/s8/loso_auroc_l1.tsv, 11 case/control studies), whose
+# reference_relative model is the one checkGM ships for assembly assessments (src/checkgm/health_score_model_assembly.json,
+# refit on all 11 studies). GMHI and GMWI2 are defined on MetaPhlAn species, which assembly output does not carry, so they
+# have no assembly rows; s8's genus-level "health_index" approximation is not GMHI and is not plotted.
 H = pd.read_csv(f"{P}/results/s15/health_indices_B.tsv", sep="\t"); base = H.drop_duplicates("study").set_index("study")
 # Every bar is a logistic regression or a published score evaluated as published: no random forest anywhere, and no
 # checkGM variant that the software does not distribute. The deviation score plotted is therefore the percentile-only
@@ -115,8 +116,32 @@ for _st in base.index:
 rows.append(("fraction outside", pd.Series(_rows)))
 fb = pd.concat([pd.DataFrame({"method": lab, "study": s_.index, "auroc": s_.values}) for lab, s_ in rows])
 fb["unseen"] = ~fb.study.map(base.in_gmwi2_training).astype(bool)
+# Assembly pipeline: the same labels, from the s8 L1 run. The fraction outside is scored directly, as for the read
+# pipeline, on each study's s8 scores, every one of which was computed against the LOSO bundle built without that study
+# (checked below from the bundle id stamped in the summaries), over exactly the samples the models were evaluated on.
+# Genus is the layer it does best on (mean over the 11 studies: genus 0.585, family 0.557, eggNOG KO 0.558, Pfam 0.551,
+# KOfam 0.543, module 0.491), so again the comparison is not stacked against it.
+A8 = pd.read_csv(f"{P}/results/s8/loso_auroc_l1.tsv", sep="\t"); A8 = A8[A8.study != "POOLED"]
+arows = [(lab, A8[A8.feature_set == fs].set_index("study").auroc_loso) for lab, fs in
+         [("checkGM deviation score", "reference_relative"), ("raw abundances, same model", "raw_clr")]]
+# alpha diversity scored directly, lower meaning disease, exactly as s15 scores it on the read pipeline (family Shannon,
+# since assembly output has no species layer); s8's alpha_diversity row is a fitted model and would not be comparable
+arows.append(("Alpha diversity", pd.read_csv(f"{P}/results/s8/alpha_direct_A.tsv", sep="\t").set_index("study").auroc_direct))
+_pa = pd.read_parquet(f"{P}/results/s8/loso_predictions_l1.parquet").query("feature_set == 'reference_relative'")
+_rows = {}
+for _st, _t in _pa.groupby("study"):
+    _sm = pd.read_parquet(f"{P}/work/s8/scores/{_st}_summaries.parquet").query("layer == 'taxonomy_genus'")
+    assert set(_sm.bundle_id) == {f"gut-assembly-adult-global-v0.8-lenient-loso-{_st}"}, _st
+    _x = _sm.drop_duplicates("analysis_id").set_index("analysis_id").frac_outside_raw.reindex(_t.analysis_id)
+    assert _x.notna().all() and _t.y.nunique() == 2
+    _rows[_st] = roc_auc_score(_t.y.to_numpy(), _x.to_numpy())
+arows.append(("fraction outside", pd.Series(_rows)))
+fa = pd.concat([pd.DataFrame({"method": lab, "study": s_.index, "auroc": s_.values}) for lab, s_ in arows])
+assert fa.groupby("method").study.nunique().eq(11).all()
+fa["unseen"] = pd.NA   # GMWI2 is not computed on assembly output, so "studies GMWI2 never saw" does not apply
 f3 = pd.concat([fb.assign(pipeline="Read pipeline (14 studies)"),
-                fb[fb.unseen].assign(pipeline="Read pipeline, 4 studies GMWI2 never saw")])
+                fb[fb.unseen].assign(pipeline="Read pipeline, 4 studies GMWI2 never saw"),
+                fa.assign(pipeline="Assembly pipeline (11 studies)")])
 f3.to_csv(f"{OUT}/f3_auroc.csv", index=False)
 
 # ---- Fig 4: C. difficile cohort (assembly) and colorectal cancer cohorts (read)

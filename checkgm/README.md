@@ -42,7 +42,7 @@ Two spellings of one name are used deliberately: checkGM for the project and the
 console script and the container tag.
 
 Requirements: Python 3.10 or later; numpy, pandas, scipy, pyarrow, pyyaml and tabulate are installed automatically.
-To work from a clone: `cd checkgm && pip install -e ".[test]" && pytest` (155 tests, about 100 s). The quotes matter
+To work from a clone: `cd checkgm && pip install -e ".[test]" && pytest` (162 tests, about 140 s). The quotes matter
 in zsh, which would otherwise read `.[test]` as a glob. `pip install "checkgm[figures]"` adds matplotlib, which
 `checkgm assess` uses to draw the per-sample report figure; without it the tables are written and the figure is
 skipped with a note.
@@ -58,7 +58,7 @@ Five commands cover the whole workflow, and `checkgm <command> --help` documents
 | `setup` | downloads the reference baselines (`setup bundles`), or a pipeline's reference databases (`setup db`) |
 | `profile` | runs a measurement pipeline on raw reads: assembly, or MetaPhlAn 3 |
 | `assess` | places a sample against its baseline — percentiles, calls, report and figure |
-| `score` | the supervised health score, computed from an `assess` output |
+| `score` | the supervised health score, computed from an `assess` output; one model ships per pipeline (read, assembly) and the one matching the assessment's baseline is applied |
 | `end-to-end` | `profile`, then `assess`, then `score`, under one output directory |
 
 `assess` works out what kind of input it was given from what the path holds — an assembly query directory, an MGnify v5
@@ -234,8 +234,10 @@ donor cohort are held out together (`docs/validation.md` section 2).
   are the stronger ones, reaching 0.631 against 0.585 for the taxa. Of 43 known-biology expectations tested on that
   pipeline, 14 were confirmed.
 - The published comparators are matched rather than beaten. Over the same 14 read-based studies GMHI reaches 0.62 and
-  GMWI2 0.72, against 0.75 for the manuscript's supervised health score. That score is an analysis reported in `paper/`
-  and not a feature of this package: no subcommand fits or applies one. Neither comparison is made on wholly equal
+  GMWI2 0.72, against 0.75 for the manuscript's supervised health score. `checkgm score` applies the percentile-only
+  variant of that model (0.719 over the same studies) to read-based assessments, and to assembly-based ones the same
+  kind of L1 model on assembly percentiles, fitted on the 11 assembly case/control studies (mean leave-one-study-out
+  AUROC 0.622, `results/s8/report_loso_l1.md` in the workspace); the package applies both and fits neither. Neither comparison is made on wholly equal
   terms. Only 33 of GMHI's 50 species are matched by name in MetaPhlAn 3, so its figure should be read as a lower bound
   on what that index achieves on its native input. GMWI2's training set, meanwhile, contains samples from 10 of those
   14 studies, whereas every checkGM figure here comes from a model trained without the study it scored. On the four
@@ -264,7 +266,7 @@ donor cohort are held out together (`docs/validation.md` section 2).
 - The early example profile `checkgm/examples/CosteaPI_2017_alien2-11-0-0.txt` (a public curatedMetagenomicData 3 profile,
   commits `97cba6b`, `92c85ce`) stays in the history of branch `checkgm` by the owner's decision of 2026-10-02 (`CHANGELOG.md`);
   the example shipped since 0.8.0 is synthetic.
-- Tests: `pip install -e ".[test]" && pytest` (155 tests, about 100 s). CI runs them on Python 3.10 and 3.12
+- Tests: `pip install -e ".[test]" && pytest` (162 tests, about 140 s). CI runs them on Python 3.10 and 3.12
   (`.github/workflows/test.yml` at the repository root).
 - `scripts/viz2/` and `scripts/viz/` are dated snapshots of the project workspace's figure scripts and are not edited
   here, the workspace copy being the authority, so neither should be expected to diff clean against it. The v2 pair

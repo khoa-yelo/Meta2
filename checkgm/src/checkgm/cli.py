@@ -516,7 +516,9 @@ def _add(p, *names, out: str | None = None):
 
 # Below this many of the health score's features present, the score is near its intercept and carries little sample
 # information. Set from the cohort the model was fitted on: the 1st percentile of features present per sample, over the
-# 9,123 read-pipeline out-of-sample scorings (median 34 of 104, p1 = 12), so it marks the genuinely sparse tail.
+# 9,123 read-pipeline out-of-sample scorings (median 34 of 104, p1 = 12), so it marks the genuinely sparse tail. The
+# assembly model carries its own value ("thin_features", the same percentile over its 2,294 training samples), which
+# takes precedence; this one is the read model's and the fallback for a model file that carries none.
 THIN_FEATURES = 12
 
 ASSEMBLY_QUERY_FILES = ("contigs.tsv", "cds.tsv", "cds_taxonomy.tsv")   # read_query_dir's own requirement
@@ -604,7 +606,8 @@ def _figures_or_say_why(assessed: str, out_dir: str) -> None:
 def cmd_health_score(a) -> int:
     """The supervised health score, read from an assess output directory."""
     from checkgm import healthscore
-    model = healthscore.load_model(a.model)
+    # the shipped model of the assessment's pipeline, or --model once checked to belong to that pipeline
+    model = healthscore.model_for(a.assessed, a.model)
     if a.explain:
         print(healthscore.explain(a.assessed, a.explain, model, top=a.top).to_string(index=False))
         return 0
@@ -614,14 +617,16 @@ def cmd_health_score(a) -> int:
     # fewer than half, so a "most features absent" warning would fire on almost every legitimate sample. The threshold
     # is therefore taken from that distribution — the 1st percentile is 12 features — and flags only a sample sparse
     # even by this model's standards, where the score is close to the intercept whatever the sample holds.
+    thin_at = int(model.get("thin_features", THIN_FEATURES))
     if {"n_features_present", "n_features_absent"} <= set(t.columns) and len(t):
-        thin = t[t["n_features_present"] < THIN_FEATURES]
+        thin = t[t["n_features_present"] < thin_at]
         if len(thin):
             ids = ", ".join(str(x) for x in thin["analysis_id"].head(3)) + (" ..." if len(thin) > 3 else "")
-            print(f"note: {len(thin)} of {len(t)} sample(s) carry fewer than {THIN_FEATURES} of the model's "
+            base = "gut-assembly" if model.get("pipeline") == "assembly" else "gut-reads"
+            print(f"note: {len(thin)} of {len(t)} sample(s) carry fewer than {thin_at} of the model's "
                   f"{len(model['features'])} features ({ids}), which 99% of the reference cohort exceeds; their score "
                   f"sits near the intercept and says little about the sample. Check that the assessment used a "
-                  f"gut-reads baseline and that the profile is not unusually sparse.", file=sys.stderr)
+                  f"{base} baseline and that the profile is not unusually sparse.", file=sys.stderr)
     os.makedirs(a.out, exist_ok=True)
     p = os.path.join(a.out, "health_score.tsv")
     t.to_csv(p, sep="\t", index=False)
@@ -779,12 +784,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("score", help="the supervised health score, from an assess output",
                        description="Apply the shipped health score to a directory 'checkgm assess' wrote. The score is an L1-penalised logistic "
-                                   "regression over reference percentiles, fitted on 14 case/control studies and reported here as a decision "
-                                   "function: higher is more case-like. It is defined for read-based assessments only, and it is a research "
+                                   "regression over reference percentiles, reported here as a decision function: higher is more case-like. "
+                                   "One model ships per pipeline and the one matching the assessment's baseline is used: the read model "
+                                   "(fitted on 9,097 samples from 37 read-pipeline studies) for gut-reads-* assessments, the assembly model "
+                                   "(fitted on 11 assembly case/control studies) for gut-assembly-* assessments. It is a research "
                                    "instrument, not a diagnostic.")
     p.add_argument("--assessed", help="directory 'checkgm assess' wrote (holding scores.parquet)")
     p.add_argument("--out", help="directory to write health_score.tsv to")
-    p.add_argument("--model", default=None, help="a health-score model JSON to use instead of the shipped one")
+    p.add_argument("--model", default=None, help="a health-score model JSON to use instead of the shipped one; it must have been fitted on the assessment's pipeline (read or assembly)")
     p.add_argument("--explain", metavar="SAMPLE", help="print the per-feature contributions for one sample instead of scoring every sample")
     p.add_argument("--top", type=int, default=15, help="with --explain, how many features to show (default 15)")
     # The old 'score' compared normalized tables with a bundle; that is 'assess' now, and is still available in full as

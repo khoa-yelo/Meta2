@@ -1,8 +1,10 @@
-"""checkgm.healthscore: the arithmetic of the shipped health score, and the two refusals that matter more than it —
-an assembly assessment, and a model file carrying the species-presence features whose top coefficient is a batch
-artifact. The assessments are written here by hand in the shape cli.write_report writes, so nothing external is needed."""
+"""checkgm.healthscore: the arithmetic of the shipped health scores, the choice of model by the assessment's pipeline,
+and the refusals that matter more than either — an assessment that identifies as neither pipeline, a model fitted on
+the other pipeline, and a model file carrying the species-presence features whose top coefficient is a batch artifact. The assessments are written here by hand in the shape cli.write_report writes, so nothing external is needed."""
 import json
 import os
+import subprocess
+import sys
 import warnings
 
 import numpy as np
@@ -44,6 +46,7 @@ def toy_model(p, features=None, **over):
 
 
 READS = "gut-reads-adult-global-v0.2-lenient"
+ASSEMBLY = "gut-assembly-adult-global-v0.8-lenient"
 
 
 def reads_assessment(tmp_path, name="A"):
@@ -67,6 +70,21 @@ def test_shipped_model_is_percentile_only():
     assert {lay for _, lay, _ in m["parsed"]} <= {"taxonomy_family", "taxonomy_genus", "taxonomy_species"}
     assert all(f["scale"] > 0 for f in m["features"])
     assert np.isfinite(m["intercept"])
+    assert m["pipeline"] == "reads" and m["path"] == hs.default_model_path("reads")
+
+
+def test_shipped_assembly_model_reads_assembly_layers_only():
+    """The assembly model's features are what an assembly assessment carries: percentiles of family, genus, eggNOG KO
+    and KEGG module, and per-layer summary counts of the assembly layers. Nothing of the read pipeline."""
+    m = hs.load_model(pipeline="assembly")
+    assert m["pipeline"] == "assembly" and m["path"] == hs.default_model_path("assembly")
+    assert m["trained_on"]["studies"] == 11
+    pct = {lay for k, lay, _ in m["parsed"] if k == "pct"}; summ = {lay for k, lay, _ in m["parsed"] if k == "summary"}
+    assert pct <= {"taxonomy_family", "taxonomy_genus", "ko_eggnog", "module"} and pct & hs.ASSEMBLY_LAYERS
+    assert summ <= {"taxonomy_family", "taxonomy_genus"} | hs.ASSEMBLY_LAYERS
+    assert not [f for f in m["features"] if str(f["name"]).startswith("present:")]
+    assert all(f["scale"] > 0 and f["coef"] != 0 for f in m["features"])
+    assert np.isfinite(m["intercept"]) and m["thin_features"] > 0
 
 
 def test_load_model_rejects_presence_features(tmp_path):
@@ -157,30 +175,95 @@ def test_shipped_model_scores_a_real_shaped_assessment(tmp_path):
 
 # --------------------------------------------------------------------------------------------- the refusals
 
-def test_assembly_assessment_is_refused(tmp_path):
-    d = write_assessment(str(tmp_path / "asm"),
-                         [("S1", "ko_eggnog", "K00001", 50.0, "within"), ("S1", "taxonomy_genus", "816", 60.0, "within")],
-                         [("S1", "ko_eggnog", 0.02, 0, "gut-assembly-adult-global-v0.8-lenient"),
-                          ("S1", "taxonomy_genus", 0.04, 1, "gut-assembly-adult-global-v0.8-lenient")])
-    for fn in (lambda: hs.score_assessment(d), lambda: hs.explain(d, "S1")):
-        with pytest.raises(ValueError, match="read pipeline only"):
+def assembly_assessment(tmp_path, name="asm", bundle=ASSEMBLY):
+    """One assembly-shaped sample carrying the shipped assembly model's first percentile feature (at 77) and a genus
+    fraction outside of 0.2; every other model feature is absent or, for a summary count of a scored layer, 0."""
+    m = hs.load_model(pipeline="assembly")
+    _, layer, fid = next(t for t in m["parsed"] if t[0] == "pct")
+    rows = [("S1", layer, fid, 77.0, "within"), ("S1", "ko_eggnog", "K99999", 50.0, "within")]   # the second is no feature
+    summ = [("S1", lay, fo, 0, bundle) for lay, fo in (("taxonomy_genus", 0.2), ("ko_eggnog", 0.02), ("pfam", 0.03))]
+    return write_assessment(str(tmp_path / name), rows, summ), m, layer, fid
+
+
+def test_assembly_assessment_selects_the_assembly_model(tmp_path):
+    d, m, _, _ = assembly_assessment(tmp_path)
+    assert hs.model_for(d)["pipeline"] == "assembly"
+    assert hs.model_for(d)["path"] == hs.default_model_path("assembly")
+
+
+def test_assembly_assessment_scores_with_the_assembly_model(tmp_path):
+    """The default call on an assembly assessment applies the shipped assembly model, checked against the plain formula:
+    the one percentile given, genus frac_outside 0.2, every other feature 0 (absent, or a summary count of 0)."""
+    d, m, layer, fid = assembly_assessment(tmp_path)
+    r = hs.score_assessment(d)
+    want = m["intercept"]
+    for f, (kind, lay, key) in zip(m["features"], m["parsed"]):
+        v = 77.0 if (kind, lay, key) == ("pct", layer, fid) else 0.2 if (kind, lay, key) == ("summary", "taxonomy_genus", "frac_outside_raw") else 0.0
+        want += float(f["coef"]) * (v - float(f["mean"])) / float(f["scale"])
+    assert r.loc[0, "score"] == pytest.approx(want)
+    assert r.loc[0, "score"] == pytest.approx(hs.score_assessment(d, hs.load_model(pipeline="assembly")).loc[0, "score"])
+    # present: the percentile, plus each summary feature of the three layers the assessment summarised
+    n_summary = sum(1 for k, lay, _ in m["parsed"] if k == "summary" and lay in {"taxonomy_genus", "ko_eggnog", "pfam"})
+    assert r.loc[0, "n_features_present"] == 1 + n_summary
+    assert r.loc[0, "n_features_absent"] == len(m["features"]) - 1 - n_summary
+    e = hs.explain(d, "S1", top=None)
+    assert e.attrs["score"] == pytest.approx(want) and len(e) == len(m["features"])
+
+
+def test_read_model_on_an_assembly_assessment_is_refused(tmp_path):
+    d, _, _, _ = assembly_assessment(tmp_path)
+    for fn in (lambda: hs.score_assessment(d, hs.load_model()), lambda: hs.explain(d, "S1", hs.load_model()),
+               lambda: hs.model_for(d, hs.default_model_path("reads")),
+               lambda: hs.score_assessment(d, json.load(open(hs.default_model_path("reads"))))):
+        with pytest.raises(ValueError, match="read-pipeline health-score model.*assembly-pipeline baseline"):
             fn()
 
 
-def test_assembly_is_refused_on_layers_alone(tmp_path):
-    """A bundle id that does not follow the gut-assembly-* naming is still caught by the layers it scored."""
+def test_assembly_model_on_a_read_assessment_is_refused(tmp_path):
+    d = reads_assessment(tmp_path)
+    with pytest.raises(ValueError, match="assembly-pipeline health-score model.*read-pipeline baseline"):
+        hs.score_assessment(d, hs.load_model(pipeline="assembly"))
+    assert hs.model_for(d)["pipeline"] == "reads"
+
+
+def test_assembly_is_identified_on_layers_alone(tmp_path):
+    """A bundle id that does not follow the gut-assembly-* naming is still identified by the layers it scored."""
     d = write_assessment(str(tmp_path / "asm2"), [("S1", "pfam", "PF00001", 50.0, "within")],
                          [("S1", "pfam", 0.02, 0, "local-rebuild")])
-    with pytest.raises(ValueError, match="read pipeline only"):
-        hs.score_assessment(d)
+    assert hs.model_for(d)["pipeline"] == "assembly"
+    with pytest.raises(ValueError, match="read-pipeline health-score model"):
+        hs.score_assessment(d, hs.load_model())
 
 
 def test_unidentifiable_assessment_is_refused(tmp_path):
-    """Taxonomy-only and no recognizable bundle id: nothing says this is read-based, so no number is produced."""
+    """Taxonomy-only and no recognizable bundle id: nothing says which pipeline this is, so no number is produced."""
     d = write_assessment(str(tmp_path / "amb"), [("S1", "taxonomy_genus", "816", 50.0, "within")],
                          [("S1", "taxonomy_genus", 0.02, 0, "local-rebuild")])
-    with pytest.raises(ValueError, match="cannot identify as read-based"):
+    for fn in (lambda: hs.score_assessment(d), lambda: hs.model_for(d)):
+        with pytest.raises(ValueError, match="cannot identify as read-based or assembly-based"):
+            fn()
+
+
+def test_mixed_assessment_is_refused(tmp_path):
+    d = write_assessment(str(tmp_path / "mix"), [("S1", "taxonomy_genus", "816", 50.0, "within")],
+                         [("S1", "taxonomy_genus", 0.02, 0, READS), ("S2", "taxonomy_genus", 0.02, 0, ASSEMBLY)])
+    with pytest.raises(ValueError, match="both a read-based and an assembly-based baseline"):
         hs.score_assessment(d)
+
+
+def test_cli_score_on_an_assembly_assessment(tmp_path):
+    """`checkgm score` on an assembly assessment uses the assembly model, and `--model` with the read model is a
+    one-line refusal (exit 1), not a number."""
+    d, m, _, _ = assembly_assessment(tmp_path)
+    run = lambda *x: subprocess.run([sys.executable, "-m", "checkgm.cli", "score", "--assessed", d, *x], capture_output=True, text=True)
+    r = run("--out", str(tmp_path / "hs"))
+    assert r.returncode == 0, r.stderr
+    t = pd.read_csv(tmp_path / "hs" / "health_score.tsv", sep="\t")
+    assert t.loc[0, "score"] == pytest.approx(hs.score_assessment(d).loc[0, "score"])
+    assert f"fewer than {m['thin_features']} of the model's {len(m['features'])}" in r.stderr and "gut-assembly baseline" in r.stderr
+    r = run("--out", str(tmp_path / "hs2"), "--model", hs.default_model_path("reads"))
+    assert r.returncode == 1 and r.stderr.startswith("checkgm: ") and len(r.stderr.strip().splitlines()) == 1
+    assert "read-pipeline health-score model" in r.stderr
 
 
 def test_no_shared_features_is_refused(tmp_path):
@@ -212,6 +295,7 @@ def test_no_library_warning_escapes(tmp_path):
         hs.score_assessment(d, m)
         hs.explain(d, "S2", m)
         hs.load_model()
+        hs.load_model(pipeline="assembly")
 
 
 def test_raw_json_model_is_accepted(tmp_path):

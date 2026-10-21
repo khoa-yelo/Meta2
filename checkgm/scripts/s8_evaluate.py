@@ -3,7 +3,7 @@
 
 Folds: the case/control studies in work/s8_fold_studies.txt. Every study's samples were scored (S7) against a
 reference built WITHOUT that study (work/s8/scores/<study>.parquet), so no sample ever sees a reference containing
-its own study. Feature sets, same classifier (random forest, 500 trees, seeded), same folds:
+its own study. Feature sets, same classifier (MODEL=l1: L1 logistic regression, the paper's; MODEL=rf: random forest, 500 trees, seeded), same folds:
   reference_relative  — per-feature percentile (undetected -> 0; expected_but_missing -> 0) for family, genus,
                         eggNOG KO and module layers, plus per-layer deviation counts
   raw_clr             — family + genus CLR, and log10(copies-per-genome + 1e-3) for eggNOG KO, module completeness
@@ -200,7 +200,9 @@ def main():
                            wilcoxon_p=round(wilcoxon(d, alternative="greater").pvalue, 3) if d.abs().sum() > 0 else np.nan))
     paired = pd.DataFrame(paired)
     L = [f"# S8 — leave-one-study-out case/control AUROC ({len(folds)} studies, {len(meta):,} in-stratum samples, {int(y.sum()):,} cases)\n",
-         "Same random forest (500 trees, balanced class weights, seed 20261020), same folds, for every feature set. Each study's features were computed against a reference built without that study.\n",
+         (f"Same random forest (500 trees, balanced class weights, seed {SEED}), same folds, for every feature set." if MODEL == "rf" else
+          f"Same L1-penalised logistic regression (StandardScaler, liblinear, balanced class weights; C from {CS} by grouped inner CV on the training studies), same folds, for every feature set. "
+          "The within-study ceiling column is still a 5-fold random forest.") + " Each study's features were computed against a reference built without that study.\n",
          "## Per held-out study\n", per_study.to_markdown(), "\n\n## Summary\n",
          pd.DataFrame({"macro_mean": macro["mean"], "macro_median": macro["median"], "pooled_auroc": pooled, "within_study_cv_median (ceiling)": within}).to_markdown(),
          f"\n\n## Paired comparison across the {len(folds)} held-out studies (one-sided Wilcoxon, reference_relative greater)\n", paired.to_markdown(index=False),
